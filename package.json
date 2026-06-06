@@ -1,0 +1,6 @@
+{
+  "devDependencies": {
+    "pm2": "^7.0.1",
+    "serve": "^14.2.6"
+  }
+}

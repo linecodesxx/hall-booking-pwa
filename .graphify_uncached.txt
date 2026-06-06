@@ -1,0 +1,4 @@
+C:\Users\feytell2\Documents\projects\hall-booking-pwa\README.md
+C:\Users\feytell2\Documents\projects\hall-booking-pwa\frontend\public\index.html
+C:\Users\feytell2\Documents\projects\hall-booking-pwa\frontend\public\icon-192.png
+C:\Users\feytell2\Documents\projects\hall-booking-pwa\frontend\public\icon-512.png
