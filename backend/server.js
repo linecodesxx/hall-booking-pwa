@@ -12,7 +12,8 @@ const app = express();
 const PORT = Number(process.env.PORT || 3001);
 const JWT_SECRET = process.env.JWT_SECRET || 'change_me';
 
-app.use(cors({ origin: process.env.CORS_ORIGIN || true }));
+app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }));
+app.options('*', cors({ origin: process.env.CORS_ORIGIN || '*' }));
 app.use(express.json());
 
 const asyncHandler = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -200,6 +201,16 @@ app.post('/api/bookings', requireAuth, asyncHandler(async (req, res) => {
   const hall = db.prepare('SELECT * FROM halls WHERE id = ? AND is_active = 1').get(data.hall_id);
   if (!hall) throw badRequest('Выбранное помещение недоступно');
   if (findApprovedConflict(data).length) throw Object.assign(new Error('Это время уже занято. Выберите другое время.'), { status: 409 });
+  const isAdmin = req.user.role === 'admin';
+  if (isAdmin) {
+    if (findPendingOverlap(data).length) throw Object.assign(new Error('На это время есть ожидающие заявки. Выберите другое время.'), { status: 409 });
+    const result = db.prepare(`
+      INSERT INTO bookings (user_id, hall_id, title, comment, date, start_time, end_time, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'approved')
+    `).run(req.user.id, data.hall_id, data.title, data.comment, data.date, data.start_time, data.end_time);
+    const booking = bookingSelect('WHERE b.id = ?', [result.lastInsertRowid])[0];
+    return res.status(201).json({ booking: publicBooking(booking, req.user) });
+  }
   const pending_conflicts = findPendingOverlap(data).map((row) => publicBooking(row, req.user));
   const result = db.prepare(`
     INSERT INTO bookings (user_id, hall_id, title, comment, date, start_time, end_time, status)

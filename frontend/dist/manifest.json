@@ -5,11 +5,8 @@
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "orientation": "portrait",
   "background_color": "#f6f8fb",
   "theme_color": "#2563eb",
-  "categories": ["business", "productivity"],
-  "prefer_related_applications": false,
   "icons": [
     {
       "src": "/icon.svg",

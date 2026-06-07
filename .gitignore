@@ -1,9 +1,14 @@
 node_modules/
 frontend/build/
-backend/data.sqlite
-backend/data.sqlite-*
+frontend/.env
+frontend/node_modules/
+backend/data/
+backend/.env
+backend/node_modules/
 logs/
 .env
 *.log
 .DS_Store
 Thumbs.db
+graphify-*/
+.graphify_*
