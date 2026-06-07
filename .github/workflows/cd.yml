@@ -1,0 +1,52 @@
+name: CD
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install & build frontend
+        run: |
+          npm ci
+          npm run build
+        working-directory: frontend
+
+      - name: Deploy to VPS via SSH
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: |
+            frontend/dist/*
+            backend/**/*
+            !backend/node_modules
+            !backend/data
+          target: /var/www/hall-booking
+          strip_components: 0
+
+      - name: Restart app on VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /var/www/hall-booking
+            npm ci --production
+            cp .env backend/.env 2>/dev/null || true
+            pm2 restart hall-booking || pm2 start backend/server.js --name hall-booking
+            pm2 save

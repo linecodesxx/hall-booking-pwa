@@ -12,3 +12,4 @@ logs/
 Thumbs.db
 graphify-*/
 .graphify_*
+.github\workflows
