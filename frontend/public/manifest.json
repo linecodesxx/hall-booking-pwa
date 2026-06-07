@@ -1,25 +1,23 @@
 {
-  "short_name": "Залы",
   "name": "Бронирование залов",
-  "description": "PWA для бронирования залов закрытой группы",
+  "short_name": "Залы",
+  "description": "Закрытое приложение для бронирования помещений организации",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "orientation": "portrait",
-  "theme_color": "#0d0d0f",
-  "background_color": "#0d0d0f",
+  "background_color": "#f6f8fb",
+  "theme_color": "#2563eb",
   "icons": [
     {
-      "src": "/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
     },
     {
-      "src": "/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
+      "src": "/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
     }
   ]
 }
