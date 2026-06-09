@@ -57,7 +57,10 @@ export const db = {
 };
 
 export async function initDb() {
-	SQL = await initSqlJs();
+	SQL = await initSqlJs({
+		locateFile: (file) =>
+			path.join(__dirname, "node_modules", "sql.js", "dist", file),
+	});
 	database = fs.existsSync(dbPath)
 		? new SQL.Database(fs.readFileSync(dbPath))
 		: new SQL.Database();
