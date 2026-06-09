@@ -1,6 +1,16 @@
 {
-  "devDependencies": {
-    "pm2": "^7.0.1",
-    "serve": "^14.2.6"
-  }
+	"scripts": {
+		"lint": "biome check frontend/src backend ecosystem.config.js",
+		"format": "biome check --write frontend/src backend ecosystem.config.js",
+		"lint:all": "biome check frontend/src backend ecosystem.config.js package.json",
+		"format:all": "biome check --write frontend/src backend ecosystem.config.js package.json"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.4.16",
+		"pm2": "^7.0.1",
+		"serve": "^14.2.6"
+	},
+	"dependencies": {
+		"@tanstack/react-query": "^5.101.0"
+	}
 }

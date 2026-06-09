@@ -6,6 +6,12 @@ const apiTarget = process.env.VITE_API_URL?.replace(/\/+$/, '') || process.env.V
 export default defineConfig({
   plugins: [react()],
   server: {
-    proxy: { '/api': apiTarget }
+    proxy: {
+      '/api': apiTarget,
+      '/ws': {
+        target: apiTarget,
+        ws: true,
+      },
+    }
   }
 });

@@ -1,55 +1,238 @@
-import { useEffect, useState } from 'react';
-import { CalendarFilter, CalendarGrid, DateBar, HallCard, RangeCalendar } from '../components';
-import { addDays, monthDays, todayISO, weekDays } from '../utils';
+import { useRef, useState } from "react";
+import {
+	BookingModal,
+	CalendarFilter,
+	CalendarGrid,
+	CellBookingsModal,
+	DateBar,
+	DayBookingsModal,
+	HallCard,
+	RangeCalendar,
+	ScheduleSkeleton,
+} from "../components";
+import { addDays, monthDays, todayISO, weekDays } from "../utils";
 
-export function Schedule({ request, go, user }) {
-  const [date, setDate] = useState(todayISO());
-  const [view, setView] = useState('rooms');
-  const [halls, setHalls] = useState([]);
-  const [range, setRange] = useState([]);
-  const [rangeFilter, setRangeFilter] = useState('all');
-  const [loading, setLoading] = useState(true);
+const addMonths = (date, n) => {
+	const d = new Date(`${date}T12:00:00`);
+	d.setMonth(d.getMonth() + n);
+	return d.toISOString().slice(0, 10);
+};
+import { useSchedule, useRangeSchedule } from "../hooks/useSchedule";
+import { useCancelBooking, useUpdateBooking } from "../hooks/useBookings";
 
-  const rangeHalls = range.length
-    ? Object.values(range.reduce((acc, r) => { (r?.halls || []).forEach((h) => { acc[h.id] = acc[h.id] || h; }); return acc; }, {}))
-    : halls;
+export function Schedule({ go, user }) {
+	const [date, setDate] = useState(todayISO());
+	const [view, setView] = useState("rooms");
+	const [rangeFilter, setRangeFilter] = useState("all");
+	const [selectedBooking, setSelectedBooking] = useState(null);
+	const [dayBookings, setDayBookings] = useState(null);
+	const [cellData, setCellData] = useState(null);
 
-  const load = () => {
-    setLoading(true);
-    request(`/api/bookings/schedule?date=${date}`).then((data) => setHalls(data.halls || [])).catch(() => {}).finally(() => setLoading(false));
-  };
-  useEffect(() => { load(); }, [date]);
+	const { data: halls = [], isLoading: hallsLoading } = useSchedule(date);
+	const cancelBooking = useCancelBooking();
+	const updateBooking = useUpdateBooking();
 
-  useEffect(() => {
-    if (!['week', 'month'].includes(view)) return;
-    const dates = view === 'week' ? weekDays(date) : monthDays(date);
-    setLoading(true);
-    Promise.all(dates.map((day) => request(`/api/bookings/schedule?date=${day}`)))
-      .then((items) => setRange(items || []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [date, view]);
+	const rangeDates =
+		view === "week"
+			? weekDays(date)
+			: view === "month"
+				? monthDays(date)
+				: [];
+	const { data: range = [], isLoading: rangeLoading } =
+		useRangeSchedule(rangeDates);
 
-  const shift = (days) => {
-    setDate(addDays(date, days));
-  };
+	const rangeHalls = range.length
+		? Object.values(
+				range.reduce((acc, r) => {
+					(r?.halls || []).forEach((h) => {
+						acc[h.id] = acc[h.id] || h;
+					});
+					return acc;
+				}, {}),
+			)
+		: halls;
 
-  return (
-    <>
-      <DateBar date={date} setDate={setDate} shift={shift} />
-      <div className="segmented">
-        <button className={view === 'rooms' ? 'active' : ''} onClick={() => setView('rooms')}>Помещения</button>
-        <button className={view === 'day' ? 'active' : ''} onClick={() => setView('day')}>День</button>
-        <button className={view === 'week' ? 'active' : ''} onClick={() => setView('week')}>Неделя</button>
-        <button className={view === 'month' ? 'active' : ''} onClick={() => setView('month')}>Месяц</button>
-        {/* <button onClick={() => go(user.role === 'admin' ? '/admin/bookings' : '/my-bookings')}>{user.role === 'admin' ? 'Все брони' : 'Мои заявки'}</button> */}
-      </div>
-      {loading ? <p className="muted">Загружаем расписание...</p> : null}
-      {view === 'rooms' && (halls || []).map((hall) => <HallCard key={hall.id} hall={hall} date={date} go={go} />)}
-      {view === 'day' && <CalendarGrid halls={halls || []} date={date} go={go} />}
-      {['week', 'month'].includes(view) && <CalendarFilter halls={rangeHalls || []} value={rangeFilter} setValue={setRangeFilter} />}
-      {view === 'week' && <RangeCalendar mode="week" days={weekDays(date)} range={range} go={go} filter={rangeFilter} user={user} />}
-      {view === 'month' && <RangeCalendar mode="month" days={monthDays(date)} range={range} go={go} filter={rangeFilter} user={user} />}
-    </>
-  );
+	const goToday = () => setDate(todayISO());
+	const onBookingClick = (booking) => setSelectedBooking(booking);
+	const shiftView = (dir) =>
+		setDate(
+			view === "month"
+				? addMonths(date, dir)
+				: view === "week"
+					? addDays(date, dir * 7)
+					: addDays(date, dir),
+		);
+	const onDayClick = (day) => {
+		go(`/new-booking?date=${day}`);
+	};
+	const onDayBookings = (data) => setDayBookings(data);
+	const onCellClick = (hall, hour, bookings) => {
+		setCellData({ hall, hour, bookings, date });
+	};
+	const loading = hallsLoading || rangeLoading;
+
+	const handleCancel = async (id) => {
+		try {
+			await cancelBooking.mutateAsync(id);
+		} catch (err) {
+			console.error(err);
+		}
+		setSelectedBooking(null);
+	};
+
+	const handleUpdate = async (data) => {
+		try {
+			const res = await updateBooking.mutateAsync(data);
+			if (res?.booking)
+				setSelectedBooking(res.booking);
+		} catch (err) {
+			console.error(err);
+		}
+	};
+
+	const swipeRef = useRef(null);
+	const touchStartX = useRef(0);
+	const onTouchStart = (e) => {
+		touchStartX.current = e.touches[0].clientX;
+	};
+	const onTouchEnd = (e) => {
+		const dx = e.changedTouches[0].clientX - touchStartX.current;
+		if (Math.abs(dx) > 50) shiftView(dx > 0 ? -1 : 1);
+	};
+
+	return (
+		<>
+			<div className="segmented">
+				<button
+					className={view === "rooms" ? "active" : ""}
+					onClick={() => setView("rooms")}
+				>
+					Помещения
+				</button>
+				<button
+					className={view === "day" ? "active" : ""}
+					onClick={() => setView("day")}
+				>
+					День
+				</button>
+				<button
+					className={view === "week" ? "active" : ""}
+					onClick={() => setView("week")}
+				>
+					Неделя
+				</button>
+				<button
+					className={view === "month" ? "active" : ""}
+					onClick={() => setView("month")}
+				>
+					Месяц
+				</button>
+			</div>
+			<div
+				ref={swipeRef}
+				onTouchStart={onTouchStart}
+				onTouchEnd={onTouchEnd}
+				className="swipe-area container"
+			>
+			{loading ? (
+				<ScheduleSkeleton />
+			) : (
+				<div className="container">
+					{view === "rooms" &&
+				(halls || []).map((hall) => (
+					<HallCard
+						key={hall.id}
+						hall={hall}
+						date={date}
+						go={go}
+						onBookingClick={onBookingClick}
+					/>
+				))}
+			{view === "day" && (
+				<CalendarGrid
+					halls={halls || []}
+					date={date}
+					go={go}
+					onCellClick={onCellClick}
+					onBookingClick={onBookingClick}
+				/>
+			)}
+			{["week", "month"].includes(view) && (
+				<CalendarFilter
+					halls={rangeHalls || []}
+					value={rangeFilter}
+					setValue={setRangeFilter}
+				/>
+			)}
+			{view === "week" && (
+				<div className="conatiner">
+					<RangeCalendar
+						mode="week"
+						days={weekDays(date)}
+						range={range}
+						filter={rangeFilter}
+						user={user}
+						onDayClick={onDayClick}
+						onDayBookings={onDayBookings}
+						onBookingClick={onBookingClick}
+					/>
+
+					<DateBar shift={shiftView} goToday={goToday} />
+				</div>
+			)}
+			{view === "month" && (
+				<div className="conatiner">
+					
+					<RangeCalendar
+						mode="month"
+						days={monthDays(date)}
+						range={range}
+						filter={rangeFilter}
+						user={user}
+						onDayClick={onDayClick}
+						onDayBookings={onDayBookings}
+						onBookingClick={onBookingClick}
+					/>
+					<DateBar shift={shiftView} goToday={goToday} />
+				</div>
+			)}
+				</div>
+			)}
+			</div>
+			<BookingModal
+				booking={selectedBooking}
+				onClose={() => setSelectedBooking(null)}
+				user={user}
+				onCancel={handleCancel}
+				onUpdate={handleUpdate}
+				halls={rangeHalls}
+			/>
+			{dayBookings && (
+				<DayBookingsModal
+					date={dayBookings.date}
+					bookings={dayBookings.bookings}
+					onCreateBooking={() =>
+						go(`/new-booking?date=${dayBookings.date}`)
+					}
+					onBookingClick={onBookingClick}
+					onClose={() => setDayBookings(null)}
+				/>
+			)}
+			{cellData && (
+				<CellBookingsModal
+					hall={cellData.hall}
+					date={cellData.date}
+					hour={cellData.hour}
+					bookings={cellData.bookings}
+					onCreateBooking={() =>
+						go(
+							`/new-booking?hall_id=${cellData.hall.id}&date=${cellData.date}&start_time=${String(cellData.hour).padStart(2, "0")}:00&end_time=${String(cellData.hour + 1).padStart(2, "0")}:00`,
+						)
+					}
+					onBookingClick={onBookingClick}
+					onClose={() => setCellData(null)}
+				/>
+			)}
+		</>
+	);
 }

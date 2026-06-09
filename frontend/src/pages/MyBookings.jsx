@@ -1,16 +1,19 @@
-import { useEffect, useState } from 'react';
-import { BookingList } from '../components';
+import { useBookings, useCancelBooking } from "../hooks/useBookings";
+import { BookingList, ListSkeleton } from "../components";
 
-export function MyBookings({ request, setNotice }) {
-  const [bookings, setBookings] = useState([]);
-  const load = () => request('/api/bookings').then((data) => setBookings(data.bookings || [])).catch(() => {});
-  useEffect(() => { load(); }, []);
-  const cancel = async (id) => {
-    try {
-      await request(`/api/bookings/${id}/cancel`, { method: 'PATCH', body: '{}' });
-      setNotice('Заявка отменена.');
-      load();
-    } catch {}
-  };
-  return <BookingList bookings={bookings} onCancel={cancel} />;
+export function MyBookings({ setNotice }) {
+	const { data: bookings = [], isLoading } = useBookings();
+	const cancelBooking = useCancelBooking();
+
+	const cancel = async (id) => {
+		try {
+			await cancelBooking.mutateAsync(id);
+			setNotice("Заявка отменена.");
+		} catch (err) {
+			setNotice({ text: err.message, type: "error" });
+		}
+	};
+
+	if (isLoading) return <ListSkeleton rows={4} />;
+	return <BookingList bookings={bookings} onCancel={cancel} />;
 }
