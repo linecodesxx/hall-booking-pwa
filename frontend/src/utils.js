@@ -70,6 +70,13 @@ export const timeToMinutes = (time) => {
 	return hours * 60 + minutes;
 };
 
+export function urlBase64ToUint8Array(str) {
+	const padding = "=".repeat((4 - (str.length % 4)) % 4);
+	const base64 = (str + padding).replace(/-/g, "+").replace(/_/g, "/");
+	const raw = window.atob(base64);
+	return Uint8Array.from(raw, (c) => c.charCodeAt(0));
+}
+
 export const tokenStore = {
 	get: () => localStorage.getItem("token"),
 	set: (token) => localStorage.setItem("token", token),

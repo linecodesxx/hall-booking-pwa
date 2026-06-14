@@ -5,3 +5,4 @@ export { Login } from "./Login";
 export { MyBookings } from "./MyBookings";
 export { NewBooking } from "./NewBooking";
 export { Schedule } from "./Schedule";
+export { Today } from "./Today";

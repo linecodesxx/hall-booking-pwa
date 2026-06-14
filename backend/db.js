@@ -125,6 +125,42 @@ export async function initDb() {
 		db.exec("ALTER TABLE halls ADD COLUMN color TEXT");
 	}
 
+	const bookingColumns = db
+		.prepare("PRAGMA table_info(bookings)")
+		.all()
+		.map((column) => column.name);
+	if (!bookingColumns.includes("group_id")) {
+		db.exec("ALTER TABLE bookings ADD COLUMN group_id TEXT");
+		db.exec("CREATE INDEX IF NOT EXISTS idx_bookings_group_id ON bookings(group_id)");
+	}
+	if (!bookingColumns.includes("admin_seen")) {
+		db.exec("ALTER TABLE bookings ADD COLUMN admin_seen INTEGER NOT NULL DEFAULT 0");
+	}
+	if (!bookingColumns.includes("start_notified")) {
+		db.exec("ALTER TABLE bookings ADD COLUMN start_notified INTEGER NOT NULL DEFAULT 0");
+	}
+	if (!bookingColumns.includes("end_notified")) {
+		db.exec("ALTER TABLE bookings ADD COLUMN end_notified INTEGER NOT NULL DEFAULT 0");
+	}
+
+	const subCols = db
+		.prepare("PRAGMA table_info(push_subscriptions)")
+		.all()
+		.map((c) => c.name);
+	if (subCols.length === 0) {
+		db.exec(`
+      CREATE TABLE IF NOT EXISTS push_subscriptions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        endpoint TEXT NOT NULL UNIQUE,
+        p256dh TEXT NOT NULL,
+        auth TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id)
+      )
+    `);
+	}
+
 	const count = db.prepare("SELECT COUNT(*) AS count FROM halls").get().count;
 	if (!count) {
 		const insert = db.prepare(

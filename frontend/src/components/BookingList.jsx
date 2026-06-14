@@ -12,6 +12,7 @@ export function BookingList({ bookings, onCancel, adminActions }) {
 		);
 	return items.map((booking) => (
 		<article className="card booking-card" key={booking.id}>
+			{booking.admin_seen === false && <span className="badge new">Новая</span>}
 			<div className="card-head">
 				<div>
 					<h2>{booking.title}</h2>

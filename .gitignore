@@ -2,6 +2,7 @@ node_modules/
 frontend/build/
 frontend/.env
 frontend/node_modules/
+frontend/dist/
 backend/data/
 backend/.env
 backend/node_modules/
@@ -12,4 +13,7 @@ logs/
 Thumbs.db
 graphify-*/
 .graphify_*
-.github\workflows
+tests/screenshots/
+tests/ss/
+.vite/
+*.tsbuildinfo

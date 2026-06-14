@@ -10,6 +10,8 @@
   "theme_color": "#2563eb",
   "categories": ["business", "productivity"],
   "prefer_related_applications": false,
+  "lang": "ru",
+  "dir": "ltr",
   "icons": [
     {
       "src": "/icon.svg",
@@ -22,5 +24,11 @@
       "type": "image/svg+xml",
       "purpose": "maskable"
     }
-  ]
+  ],
+  "screenshots": [],
+  "serviceworker": {
+    "src": "/service-worker.js",
+    "scope": "/",
+    "use_cache": false
+  }
 }

@@ -1,6 +1,6 @@
 import { shortDate } from "../utils";
 
-function WeekDayRow({ day, bookings, onDayBookings, onBookingClick }) {
+function WeekDayRow({ day, bookings, onDayClick, onDayBookings, onBookingClick }) {
 	const dayName = new Intl.DateTimeFormat("ru-RU", { weekday: "short" }).format(
 		new Date(`${day}T12:00:00`),
 	);
@@ -15,13 +15,16 @@ function WeekDayRow({ day, bookings, onDayBookings, onBookingClick }) {
 					{new Date(`${day}T12:00:00`).getDate()}
 				</span>
 			</button>
-			<div className="week-day-bookings">
+			<div className="week-day-bookings" onClick={() => bookings.length === 0 && onDayClick(day)}>
 				{bookings.length ? (
 					bookings.map((booking) => (
 						<button
 							key={booking.id}
-							className="week-booking-item"
-							onClick={() => onBookingClick(booking)}
+							className={`week-booking-item ${booking.temporal_status}`}
+							onClick={(e) => {
+								e.stopPropagation();
+								onBookingClick(booking);
+							}}
 						>
 							<span className="week-booking-time">
 								{booking.start_time}
@@ -38,7 +41,9 @@ function WeekDayRow({ day, bookings, onDayBookings, onBookingClick }) {
 						</button>
 					))
 				) : (
-					<span className="muted">Нет броней</span>
+					<button className="week-day-add" onClick={() => onDayClick(day)}>
+						Добавить бронь
+					</button>
 				)}
 			</div>
 		</div>
@@ -98,6 +103,7 @@ export function RangeCalendar({ mode, days, range, go, filter, user, onDayClick,
 							key={day}
 							day={day}
 							bookings={bookings}
+							onDayClick={onDayClick}
 							onDayBookings={onDayBookings}
 							onBookingClick={onBookingClick}
 						/>
@@ -170,7 +176,7 @@ export function RangeCalendar({ mode, days, range, go, filter, user, onDayClick,
 							{bookings.length
 								? bookings.slice(0, 3).map((booking) => (
 										<button
-											className="range-booking"
+											className={`range-booking ${booking.temporal_status}`}
 											key={booking.id}
 											style={{
 												"--booking-color": booking.hall_color || "#2563eb",

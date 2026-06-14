@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import fs from "node:fs";
 import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
@@ -6,6 +7,7 @@ import jwt from "jsonwebtoken";
 import http from "http";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
+import webpush from "web-push";
 import { WebSocketServer } from "ws";
 import { db, findApprovedConflict, findPendingOverlap, initDb } from "./db.js";
 
@@ -14,6 +16,20 @@ dotenv.config({ path: join(__dirname, ".env") });
 
 await initDb();
 
+const vapidPath = join(__dirname, "vapid.json");
+let vapidKeys;
+if (fs.existsSync(vapidPath)) {
+	vapidKeys = JSON.parse(fs.readFileSync(vapidPath, "utf-8"));
+} else {
+	vapidKeys = webpush.generateVAPIDKeys();
+	fs.writeFileSync(vapidPath, JSON.stringify(vapidKeys, null, 2));
+}
+webpush.setVapidDetails(
+	`mailto:admin@${process.env.DOMAIN || "example.com"}`,
+	vapidKeys.publicKey,
+	vapidKeys.privateKey,
+);
+
 const app = express();
 const PORT = Number(process.env.PORT || 3001);
 const JWT_SECRET = process.env.JWT_SECRET || "change_me";
@@ -21,6 +37,11 @@ const JWT_SECRET = process.env.JWT_SECRET || "change_me";
 app.use(cors({ origin: process.env.CORS_ORIGIN || "*" }));
 app.options("*", cors({ origin: process.env.CORS_ORIGIN || "*" }));
 app.use(express.json());
+
+app.use((req, _res, next) => {
+	console.log(`${new Date().toLocaleString("ru-RU")} ${req.method} ${req.path}`);
+	next();
+});
 
 const asyncHandler = (fn) => (req, res, next) =>
 	Promise.resolve(fn(req, res, next)).catch(next);
@@ -113,6 +134,7 @@ function validateBooking(body) {
 		end_time: body.end_time,
 		title: String(body.title).trim(),
 		comment: String(body.comment || "").trim(),
+		group_id: body.group_id || null,
 	};
 }
 
@@ -127,6 +149,22 @@ function bookingSelect(where = "", params = []) {
     ORDER BY b.date DESC, b.start_time ASC
   `)
 		.all(...params);
+}
+
+function temporalStatus(row) {
+	const now = new Date();
+	const today = now.toISOString().slice(0, 10);
+	// Все временные сравнения в UTC — часовой пояс не влияет на сервер
+	if (row.date < today) return "past";
+	if (row.date > today) return "upcoming";
+	const currentMin = now.getUTCHours() * 60 + now.getUTCMinutes();
+	const [sh, sm] = row.start_time.split(":").map(Number);
+	const [eh, em] = row.end_time.split(":").map(Number);
+	const startMin = sh * 60 + sm;
+	const endMin = eh * 60 + em;
+	if (currentMin >= endMin) return "past";
+	if (currentMin >= startMin && currentMin < endMin) return "ongoing";
+	return "upcoming";
 }
 
 function publicBooking(row, viewer) {
@@ -149,13 +187,161 @@ function publicBooking(row, viewer) {
 		start_time: row.start_time,
 		end_time: row.end_time,
 		status: row.status,
+		temporal_status: temporalStatus(row),
 		user_id: admin || own ? row.user_id : undefined,
 		user_name: admin ? row.user_name : undefined,
+		group_id: admin ? row.group_id : undefined,
+		admin_seen: admin ? Boolean(row.admin_seen) : undefined,
 		created_at: admin || own ? row.created_at : undefined,
 		updated_at: admin || own ? row.updated_at : undefined,
 	};
 }
 
+function sendPush(userId, payload) {
+	const subs = db
+		.prepare("SELECT * FROM push_subscriptions WHERE user_id = ?")
+		.all(userId);
+	const data = JSON.stringify(payload);
+	for (const sub of subs) {
+		webpush
+			.sendNotification(
+				{ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+				data,
+			)
+			.catch((err) => {
+				console.log(`Push send failed for user ${userId}: ${err.statusCode}`);
+				if (err.statusCode === 410) {
+					db.prepare("DELETE FROM push_subscriptions WHERE endpoint = ?").run(
+						sub.endpoint,
+					);
+				}
+			});
+	}
+}
+
+function notifyAdmins(payload) {
+	const admins = db.prepare("SELECT id FROM users WHERE role = 'admin'").all();
+	for (const admin of admins) sendPush(admin.id, payload);
+}
+
+const groupPushTimers = new Map();
+
+function notifyNewBooking(pub) {
+	if (pub.group_id) {
+		const existing = groupPushTimers.get(pub.group_id);
+		if (existing) {
+			clearTimeout(existing.timer);
+			existing.count++;
+			existing.timer = setTimeout(() => {
+				notifyAdmins({
+					title: "Новые брони",
+					body: `${pub.title} от ${pub.user_name} — ${existing.count} шт`,
+					icon: "/icon.svg",
+					data: { url: "/admin/bookings" },
+				});
+				groupPushTimers.delete(pub.group_id);
+			}, 2000);
+		} else {
+			const timer = setTimeout(() => {
+				notifyAdmins({
+					title: "Новая бронь",
+					body: `${pub.title} от ${pub.user_name}`,
+					icon: "/icon.svg",
+					data: { url: "/admin/bookings" },
+				});
+				groupPushTimers.delete(pub.group_id);
+			}, 2000);
+			groupPushTimers.set(pub.group_id, { count: 1, timer });
+		}
+	} else {
+		notifyAdmins({
+			title: "Новая бронь",
+			body: `${pub.title} от ${pub.user_name}`,
+			icon: "/icon.svg",
+			data: { url: "/admin/bookings" },
+		});
+	}
+}
+
+function pad(n) {
+	return String(n).padStart(2, "0");
+}
+
+function currentTimeStr() {
+	const d = new Date();
+	return `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+}
+
+function tryNotifyBookingStart() {
+	const today = new Date().toISOString().slice(0, 10);
+	const now = currentTimeStr();
+	const rows = db
+		.prepare(
+			"SELECT b.*, h.name AS hall_name FROM bookings b JOIN halls h ON h.id = b.hall_id WHERE b.date = ? AND b.status = 'approved' AND b.start_notified = 0 AND b.start_time <= ?",
+		)
+		.all(today, now);
+	for (const row of rows) {
+		const title = row.title || "Занято";
+		sendPush(row.user_id, {
+			title: "Бронь началась",
+			body: `${title} · ${row.hall_name} · ${row.start_time}–${row.end_time}`,
+			icon: "/icon.svg",
+			data: { url: `/schedule?booking=${row.id}` },
+		});
+		notifyAdmins({
+			title: "Бронь началась",
+			body: `${title} · ${row.hall_name} · ${row.start_time}–${row.end_time}`,
+			icon: "/icon.svg",
+			data: { url: `/schedule?booking=${row.id}` },
+		});
+		db.prepare("UPDATE bookings SET start_notified = 1 WHERE id = ?").run(row.id);
+	}
+}
+
+function tryNotifyBookingEnd() {
+	const today = new Date().toISOString().slice(0, 10);
+	const now = currentTimeStr();
+	const rows = db
+		.prepare(
+			"SELECT b.*, h.name AS hall_name FROM bookings b JOIN halls h ON h.id = b.hall_id WHERE b.date = ? AND b.status = 'approved' AND b.end_notified = 0 AND b.end_time <= ?",
+		)
+		.all(today, now);
+	for (const row of rows) {
+		const title = row.title || "Занято";
+		sendPush(row.user_id, {
+			title: "Бронь закончилась",
+			body: `${title} · ${row.hall_name} · ${row.start_time}–${row.end_time}`,
+			icon: "/icon.svg",
+			data: { url: `/schedule?booking=${row.id}` },
+		});
+		notifyAdmins({
+			title: "Бронь закончилась",
+			body: `${title} · ${row.hall_name} · ${row.start_time}–${row.end_time}`,
+			icon: "/icon.svg",
+			data: { url: `/schedule?booking=${row.id}` },
+		});
+		db.prepare("UPDATE bookings SET end_notified = 1 WHERE id = ?").run(row.id);
+	}
+}
+
+setInterval(() => {
+	try {
+		tryNotifyBookingStart();
+	} catch (e) {
+		console.error("push start error:", e.message);
+	}
+	try {
+		tryNotifyBookingEnd();
+	} catch (e) {
+		console.error("push end error:", e.message);
+	}
+}, 30_000);
+
+/** POST /api/auth/login — Вход/регистрация пользователя
+ * Если пользователь существует — проверяет пароль и обновляет роль по инвайт-коду.
+ * Если пользователь новый — создаёт учётку (требуется инвайт-код).
+ * Тело: { name, password, code? }
+ * Ответ: { token, user: { id, name, role } } */
 app.post(
 	"/api/auth/login",
 	asyncHandler(async (req, res) => {
@@ -210,6 +396,9 @@ app.post(
 	}),
 );
 
+/** GET /api/auth/me — Информация о текущем пользователе
+ * Заголовок: Authorization: Bearer <token>
+ * Ответ: { user: { id, name, role } } */
 app.get(
 	"/api/auth/me",
 	requireAuth,
@@ -223,6 +412,9 @@ app.get(
 	}),
 );
 
+/** GET /api/halls — Список активных помещений
+ * Только активные (is_active = 1), сортировка по имени.
+ * Ответ: { halls: [...] } */
 app.get(
 	"/api/halls",
 	requireAuth,
@@ -235,6 +427,11 @@ app.get(
 	}),
 );
 
+/** POST /api/halls — Создать помещение (только админ)
+ * Тело: { name, description?, color? }
+ * Если color не указан — назначается следующий из палитры.
+ * Ответ: 201 { hall: { ... } }
+ * WebSocket: рассылает hall.created */
 app.post(
 	"/api/halls",
 	requireAuth,
@@ -257,6 +454,10 @@ app.post(
 	}),
 );
 
+/** DELETE /api/halls/:id — Деактивировать помещение (только админ)
+ * Мягкое удаление: is_active = 0.
+ * Ответ: { ok: true }
+ * WebSocket: рассылает hall.deactivated */
 app.delete(
 	"/api/halls/:id",
 	requireAuth,
@@ -270,6 +471,10 @@ app.delete(
 	}),
 );
 
+/** GET /api/bookings — Получить список броней
+ * Админ видит все брони; обычный пользователь — только свои.
+ * Фильтры (query): status, date, hall_id
+ * Ответ: { bookings: [...] } */
 app.get(
 	"/api/bookings",
 	requireAuth,
@@ -290,10 +495,20 @@ app.get(
 			clauses.length ? `WHERE ${clauses.join(" AND ")}` : "",
 			params,
 		);
-		res.json({ bookings: rows.map((row) => publicBooking(row, req.user)) });
+		const result = { bookings: rows.map((row) => publicBooking(row, req.user)) };
+		if (req.user.role === "admin") {
+			result.unread_count = db
+				.prepare("SELECT COUNT(*) AS c FROM bookings WHERE status = 'pending' AND admin_seen = 0")
+				.get().c;
+		}
+		res.json(result);
 	}),
 );
 
+/** GET /api/bookings/schedule — Расписание на дату
+ * Query: ?date=YYYY-MM-DD
+ * Возвращает все активные залы с привязанными pending/approved бронями.
+ * Ответ: { date, halls: [{ ...hall, bookings: [...] }] } */
 app.get(
 	"/api/bookings/schedule",
 	requireAuth,
@@ -318,6 +533,12 @@ app.get(
 	}),
 );
 
+/** POST /api/bookings — Создать бронь
+ * Тело: { hall_id, date, start_time, end_time, title, comment? }
+ * Админ получает статус approved сразу; обычный пользователь — pending.
+ * Если есть пересечение с одобренной бронью — 409.
+ * Ответ: 201 { booking: {...}, warning? }
+ * WebSocket: рассылает booking.created */
 app.post(
 	"/api/bookings",
 	requireAuth,
@@ -343,8 +564,8 @@ app.post(
 				);
 			const result = db
 				.prepare(`
-      INSERT INTO bookings (user_id, hall_id, title, comment, date, start_time, end_time, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'approved')
+      INSERT INTO bookings (user_id, hall_id, title, comment, date, start_time, end_time, status, group_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'approved', ?)
     `)
 				.run(
 					req.user.id,
@@ -354,6 +575,7 @@ app.post(
 					data.date,
 					data.start_time,
 					data.end_time,
+					data.group_id,
 				);
 			const booking = bookingSelect("WHERE b.id = ?", [
 				result.lastInsertRowid,
@@ -368,8 +590,8 @@ app.post(
 		);
 		const result = db
 			.prepare(`
-    INSERT INTO bookings (user_id, hall_id, title, comment, date, start_time, end_time, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')
+    INSERT INTO bookings (user_id, hall_id, title, comment, date, start_time, end_time, status, group_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)
   `)
 			.run(
 				req.user.id,
@@ -379,6 +601,7 @@ app.post(
 				data.date,
 				data.start_time,
 				data.end_time,
+				data.group_id,
 			);
 		const booking = bookingSelect("WHERE b.id = ?", [
 			result.lastInsertRowid,
@@ -391,9 +614,95 @@ app.post(
 				: null,
 		});
 		wss.broadcast({ type: "booking.created", booking: pub });
+		notifyNewBooking(pub);
 	}),
 );
 
+/** POST /api/bookings/batch — Создать несколько броней атомарно
+ * Все брони создаются под одним group_id. Если хотя бы одна пересекается с
+ * существующей, ни одна не создаётся (все или ничего).
+ * Тело: { bookings: [{ hall_id, date, start_time, end_time, title, comment? }] }
+ * Ответ: 201 { bookings: [...], group_id }
+ * WebSocket: рассылает booking.created для каждой */
+app.post(
+	"/api/bookings/batch",
+	requireAuth,
+	asyncHandler(async (req, res) => {
+		const items = req.body.bookings;
+		if (!Array.isArray(items) || items.length === 0)
+			throw badRequest("Нет броней для создания");
+
+		const groupId = crypto.randomUUID();
+		const isAdmin = req.user.role === "admin";
+		const validated = [];
+
+		for (let i = 0; i < items.length; i++) {
+			const data = validateBooking(items[i]);
+			const hall = db
+				.prepare("SELECT * FROM halls WHERE id = ? AND is_active = 1")
+				.get(data.hall_id);
+			if (!hall)
+				throw badRequest(`Бронь #${i + 1}: помещение недоступно`);
+			if (findApprovedConflict(data).length)
+				throw Object.assign(
+					new Error(
+						`${data.date} ${data.start_time}-${data.end_time}: время уже занято`,
+					),
+					{ status: 409 },
+				);
+			validated.push(data);
+		}
+
+		const pubs = [];
+		for (const data of validated) {
+			const status = isAdmin ? "approved" : "pending";
+			const result = db
+				.prepare(`
+          INSERT INTO bookings (user_id, hall_id, title, comment, date, start_time, end_time, status, group_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `)
+				.run(
+					req.user.id,
+					data.hall_id,
+					data.title,
+					data.comment,
+					data.date,
+					data.start_time,
+					data.end_time,
+					status,
+					groupId,
+				);
+			const booking = bookingSelect("WHERE b.id = ?", [
+				result.lastInsertRowid,
+			])[0];
+			const pub = publicBooking(booking, req.user);
+			pubs.push(pub);
+			wss.broadcast({ type: "booking.created", booking: pub });
+		}
+
+		res.status(201).json({ bookings: pubs, group_id: groupId });
+
+		if (!isAdmin) {
+			const first = pubs[0];
+			groupPushTimers.set(groupId, { count: pubs.length, timer: null });
+			setTimeout(() => {
+				notifyAdmins({
+					title: "Новые брони",
+					body: `${first.title} от ${first.user_name} — ${pubs.length} шт`,
+					icon: "/icon.svg",
+					data: { url: "/admin/bookings" },
+				});
+				groupPushTimers.delete(groupId);
+			}, 500);
+		}
+	}),
+);
+
+/** PATCH /api/bookings/:id/cancel — Отменить бронь
+ * Свой用户可以 отменить только свою бронь; админ — любую.
+ * Уже отменённые/отклонённые брони повторно отменить нельзя.
+ * Ответ: { booking: { ... } }
+ * WebSocket: рассылает booking.cancelled */
 app.patch(
 	"/api/bookings/:id/cancel",
 	requireAuth,
@@ -419,6 +728,11 @@ app.patch(
 	}),
 );
 
+/** PATCH /api/bookings/:id/approve — Подтвердить бронь (только админ)
+ * Проверяет конфликты перед подтверждением.
+ * Тело: { admin_comment? }
+ * Ответ: { booking: { ... } }
+ * WebSocket: рассылает booking.updated */
 app.patch(
 	"/api/bookings/:id/approve",
 	requireAuth,
@@ -449,9 +763,19 @@ app.patch(
 		);
 		res.json({ booking: pub });
 		wss.broadcast({ type: "booking.updated", booking: pub });
+		sendPush(booking.user_id, {
+			title: "Заявка подтверждена",
+			body: `${pub.title} • ${pub.date} ${pub.start_time}-${pub.end_time}`,
+			icon: "/icon.svg",
+			data: { url: "/my-bookings" },
+		});
 	}),
 );
 
+/** PATCH /api/bookings/:id/reject — Отклонить бронь (только админ)
+ * Тело: { admin_comment? }
+ * Ответ: { booking: { ... } }
+ * WebSocket: рассылает booking.updated */
 app.patch(
 	"/api/bookings/:id/reject",
 	requireAuth,
@@ -472,9 +796,130 @@ app.patch(
 		);
 		res.json({ booking: pub });
 		wss.broadcast({ type: "booking.updated", booking: pub });
+		sendPush(booking.user_id, {
+			title: "Заявка отклонена",
+			body: `${pub.title} • ${pub.date} ${pub.start_time}-${pub.end_time}`,
+			icon: "/icon.svg",
+			data: { url: "/my-bookings" },
+		});
 	}),
 );
 
+/** PATCH /api/bookings/mark-seen — Пометить все pending брони как прочитанные (только админ) */
+app.patch(
+	"/api/bookings/mark-seen",
+	requireAuth,
+	requireAdmin,
+	asyncHandler(async (_req, res) => {
+		db.prepare(
+			"UPDATE bookings SET admin_seen = 1 WHERE status = 'pending' AND admin_seen = 0",
+		).run();
+		res.json({ ok: true });
+	}),
+);
+
+/** PATCH /api/bookings/group/:groupId/approve — Подтвердить группу броней (только админ)
+ * Одобряет все pending брони в группе. Для каждой проверяет конфликты.
+ * Ответ: { approved: [...ids], errors: [{id, message}] }
+ * WebSocket: рассылает booking.updated для каждой подтверждённой */
+app.patch(
+	"/api/bookings/group/:groupId/approve",
+	requireAuth,
+	requireAdmin,
+	asyncHandler(async (req, res) => {
+		const group = db
+			.prepare("SELECT * FROM bookings WHERE group_id = ? AND status = 'pending'")
+			.all(req.params.groupId);
+		if (!group.length)
+			throw badRequest("В группе нет заявок, ожидающих подтверждения");
+
+		const approved = [];
+		const errors = [];
+		const comment = String(req.body.admin_comment || "").trim();
+
+		for (const booking of group) {
+			const conflicts = findApprovedConflict({
+				hall_id: booking.hall_id,
+				date: booking.date,
+				start_time: booking.start_time,
+				end_time: booking.end_time,
+				excludeId: booking.id,
+			});
+			if (conflicts.length) {
+				errors.push({
+					id: booking.id,
+					date: booking.date,
+					message: "Пересекается с подтверждённой бронью",
+				});
+				continue;
+			}
+			db.prepare(
+				"UPDATE bookings SET status = 'approved', admin_comment = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+			).run(comment, booking.id);
+			approved.push(booking.id);
+			const pub = publicBooking(
+				bookingSelect("WHERE b.id = ?", [booking.id])[0],
+				req.user,
+			);
+			wss.broadcast({ type: "booking.updated", booking: pub });
+			sendPush(booking.user_id, {
+				title: "Заявка подтверждена",
+				body: `${pub.title} • ${pub.date} ${pub.start_time}-${pub.end_time}`,
+				icon: "/icon.svg",
+				data: { url: "/my-bookings" },
+			});
+		}
+
+		res.json({ approved, errors });
+	}),
+);
+
+/** PATCH /api/bookings/group/:groupId/reject — Отклонить группу броней (только админ)
+ * Отклоняет все pending брони в группе.
+ * Тело: { admin_comment? }
+ * Ответ: { rejected: [...ids] }
+ * WebSocket: рассылает booking.updated для каждой отклонённой */
+app.patch(
+	"/api/bookings/group/:groupId/reject",
+	requireAuth,
+	requireAdmin,
+	asyncHandler(async (req, res) => {
+		const group = db
+			.prepare("SELECT * FROM bookings WHERE group_id = ? AND status = 'pending'")
+			.all(req.params.groupId);
+		if (!group.length)
+			throw badRequest("В группе нет заявок, ожидающих подтверждения");
+
+		const comment = String(req.body.admin_comment || "").trim();
+		const rejected = [];
+
+		for (const booking of group) {
+			db.prepare(
+				"UPDATE bookings SET status = 'rejected', admin_comment = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+			).run(comment, booking.id);
+			rejected.push(booking.id);
+			const pub = publicBooking(
+				bookingSelect("WHERE b.id = ?", [booking.id])[0],
+				req.user,
+			);
+			wss.broadcast({ type: "booking.updated", booking: pub });
+			sendPush(booking.user_id, {
+				title: "Заявка отклонена",
+				body: `${pub.title} • ${pub.date} ${pub.start_time}-${pub.end_time}`,
+				icon: "/icon.svg",
+				data: { url: "/my-bookings" },
+			});
+		}
+
+		res.json({ rejected });
+	}),
+);
+
+/** PATCH /api/bookings/:id — Редактировать бронь (только админ)
+ * Можно менять: title, comment, admin_comment, date, hall_id, start_time, end_time.
+ * Передавать только изменяемые поля.
+ * Ответ: { booking: { ... } }
+ * WebSocket: рассылает booking.updated */
 app.patch(
 	"/api/bookings/:id",
 	requireAuth,
@@ -531,6 +976,8 @@ app.patch(
 	}),
 );
 
+/** GET /api/users — Список пользователей (только админ)
+ * Ответ: { users: [{ id, name, role, created_at, last_login_at }] } */
 app.get(
 	"/api/users",
 	requireAuth,
@@ -546,6 +993,9 @@ app.get(
 	}),
 );
 
+/** DELETE /api/users/:id — Удалить пользователя (только админ)
+ * Нельзя удалить последнего админа.
+ * Ответ: { ok: true } */
 app.delete(
 	"/api/users/:id",
 	requireAuth,
@@ -563,8 +1013,52 @@ app.delete(
 	}),
 );
 
-app.use((err, _req, res, _next) => {
+/** GET /api/push/vapid-key — Публичный VAPID-ключ для подписки
+ * Ответ: { publicKey: "..." } */
+app.get("/api/push/vapid-key", (_req, res) => {
+	res.json({ publicKey: vapidKeys.publicKey });
+});
+
+/** POST /api/push/subscribe — Сохранить подписку push-уведомлений
+ * Тело: { endpoint, keys: { p256dh, auth } } */
+app.post(
+	"/api/push/subscribe",
+	requireAuth,
+	asyncHandler(async (req, res) => {
+		const { endpoint, keys } = req.body;
+		if (!endpoint || !keys?.p256dh || !keys?.auth)
+			throw badRequest("Invalid subscription");
+		try {
+			db.prepare(
+				"INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth) VALUES (?, ?, ?, ?)",
+			).run(req.user.id, endpoint, keys.p256dh, keys.auth);
+		} catch (_e) {
+			db.prepare(
+				"UPDATE push_subscriptions SET p256dh = ?, auth = ? WHERE endpoint = ?",
+			).run(keys.p256dh, keys.auth, endpoint);
+		}
+		res.json({ ok: true });
+	}),
+);
+
+/** DELETE /api/push/subscribe — Удалить подписку push-уведомлений
+ * Тело: { endpoint } */
+app.delete(
+	"/api/push/subscribe",
+	requireAuth,
+	asyncHandler(async (req, res) => {
+		if (!req.body.endpoint) throw badRequest("Missing endpoint");
+		db.prepare(
+			"DELETE FROM push_subscriptions WHERE endpoint = ? AND user_id = ?",
+		).run(req.body.endpoint, req.user.id);
+		res.json({ ok: true });
+	}),
+);
+
+app.use((err, req, res, _next) => {
 	const status = err.status || 500;
+	if (status >= 500) console.error(`[ERROR] ${req.method} ${req.path}:`, err);
+	else console.log(`[${status}] ${req.method} ${req.path}: ${err.message}`);
 	res.status(status).json({
 		error: status === 500 ? "Ошибка сервера" : err.message,
 		conflicts: err.conflicts,
@@ -573,6 +1067,9 @@ app.use((err, _req, res, _next) => {
 
 const server = http.createServer(app);
 
+/** WebSocket-сервер на /ws?token=<JWT>
+ * События: booking.created, booking.updated, booking.cancelled, hall.created, hall.deactivated
+ * Авторизация через query-параметр token. */
 const wss = new WebSocketServer({ server, path: "/ws" });
 
 function wsAuth(req) {

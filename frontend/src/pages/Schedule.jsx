@@ -101,43 +101,46 @@ export function Schedule({ go, user }) {
 	};
 
 	return (
-		<>
-			<div className="segmented">
-				<button
-					className={view === "rooms" ? "active" : ""}
-					onClick={() => setView("rooms")}
-				>
-					Помещения
-				</button>
-				<button
-					className={view === "day" ? "active" : ""}
-					onClick={() => setView("day")}
-				>
-					День
-				</button>
-				<button
-					className={view === "week" ? "active" : ""}
-					onClick={() => setView("week")}
-				>
-					Неделя
-				</button>
-				<button
-					className={view === "month" ? "active" : ""}
-					onClick={() => setView("month")}
-				>
-					Месяц
-				</button>
+		<div className="schedule-layout">
+			<div className="schedule-controls">
+				<div className="segmented">
+					<button
+						className={view === "rooms" ? "active" : ""}
+						onClick={() => setView("rooms")}
+					>
+						Помещения
+					</button>
+					<button
+						className={view === "day" ? "active" : ""}
+						onClick={() => setView("day")}
+					>
+						День
+					</button>
+					<button
+						className={view === "week" ? "active" : ""}
+						onClick={() => setView("week")}
+					>
+						Неделя
+					</button>
+					<button
+						className={view === "month" ? "active" : ""}
+						onClick={() => setView("month")}
+					>
+						Месяц
+					</button>
+				</div>
+				<DateBar shift={shiftView} goToday={goToday} />
 			</div>
 			<div
 				ref={swipeRef}
 				onTouchStart={onTouchStart}
 				onTouchEnd={onTouchEnd}
-				className="swipe-area container"
+				className="swipe-area schedule-viewport"
 			>
 			{loading ? (
 				<ScheduleSkeleton />
 			) : (
-				<div className="container">
+				<>
 					{view === "rooms" &&
 				(halls || []).map((hall) => (
 					<HallCard
@@ -165,38 +168,30 @@ export function Schedule({ go, user }) {
 				/>
 			)}
 			{view === "week" && (
-				<div className="conatiner">
-					<RangeCalendar
-						mode="week"
-						days={weekDays(date)}
-						range={range}
-						filter={rangeFilter}
-						user={user}
-						onDayClick={onDayClick}
-						onDayBookings={onDayBookings}
-						onBookingClick={onBookingClick}
-					/>
-
-					<DateBar shift={shiftView} goToday={goToday} />
-				</div>
+				<RangeCalendar
+					mode="week"
+					days={weekDays(date)}
+					range={range}
+					filter={rangeFilter}
+					user={user}
+					onDayClick={onDayClick}
+					onDayBookings={onDayBookings}
+					onBookingClick={onBookingClick}
+				/>
 			)}
 			{view === "month" && (
-				<div className="conatiner">
-					
-					<RangeCalendar
-						mode="month"
-						days={monthDays(date)}
-						range={range}
-						filter={rangeFilter}
-						user={user}
-						onDayClick={onDayClick}
-						onDayBookings={onDayBookings}
-						onBookingClick={onBookingClick}
-					/>
-					<DateBar shift={shiftView} goToday={goToday} />
-				</div>
+				<RangeCalendar
+					mode="month"
+					days={monthDays(date)}
+					range={range}
+					filter={rangeFilter}
+					user={user}
+					onDayClick={onDayClick}
+					onDayBookings={onDayBookings}
+					onBookingClick={onBookingClick}
+				/>
 			)}
-				</div>
+				</>
 			)}
 			</div>
 			<BookingModal
@@ -233,6 +228,6 @@ export function Schedule({ go, user }) {
 					onClose={() => setCellData(null)}
 				/>
 			)}
-		</>
+		</div>
 	);
 }

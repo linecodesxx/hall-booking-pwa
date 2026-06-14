@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { addDays, todayISO } from "../utils";
 import { FormSkeleton } from "../components";
 import { useHalls } from "../hooks/useHalls";
-import { useCreateBooking } from "../hooks/useBookings";
+import { useCreateBooking, useCreateBookingBatch } from "../hooks/useBookings";
 
 const REPEAT_LABELS = {
 	none: "Нет",
@@ -64,6 +64,7 @@ const repeatDates = (from, repeat) => {
 export function NewBooking({ setNotice, query = {}, user }) {
 	const { data: halls = [], isLoading } = useHalls();
 	const createBooking = useCreateBooking(user?.role);
+	const createBookingBatch = useCreateBookingBatch();
 	const resetForm = () => ({
 		hall_id: query.hall_id || "",
 		date_from: query.date || todayISO(),
@@ -107,44 +108,43 @@ export function NewBooking({ setNotice, query = {}, user }) {
 
 		setSeeding(days.length);
 
-		const results = await Promise.allSettled(
-			days.map((date) =>
-				createBooking.mutateAsync({
-					hall_id: form.hall_id,
-					date,
-					start_time: form.start_time,
-					end_time: form.end_time,
-					title: form.title,
-					comment: form.comment,
-				}),
-			),
-		);
+		if (days.length > 1) {
+			try {
+				const result = await createBookingBatch.mutateAsync(
+					days.map((date) => ({
+						hall_id: form.hall_id,
+						date,
+						start_time: form.start_time,
+						end_time: form.end_time,
+						title: form.title,
+						comment: form.comment,
+					})),
+				);
+				setCreated(result.bookings.length);
+				setNotice(`Создано ${result.bookings.length} броней.`);
+				setForm(resetForm());
+			} catch (err) {
+				const msg = err.message || "Ошибка при создании";
+				setNotice({ text: msg, type: "error" });
+			}
+			setSeeding(0);
+			return;
+		}
 
-		const fulfilled = results.filter((r) => r.status === "fulfilled").length;
-		const errors = results
-			.filter((r) => r.status === "rejected")
-			.map((r, i) => `${days[i]}: ${r.reason.message}`);
-
-		setCreated(fulfilled);
-
-		if (errors.length === 0) {
-			setNotice(
-				fulfilled === 1
-					? "Бронь создана."
-					: `Создано ${fulfilled} броней.`,
-			);
-			setForm(resetForm());
-		} else if (fulfilled > 0) {
-			setNotice({
-				text: `Создано ${fulfilled} из ${days.length}. Ошибки: ${errors.join("; ")}`,
-				type: "error",
+		try {
+			await createBooking.mutateAsync({
+				hall_id: form.hall_id,
+				date: form.date_from,
+				start_time: form.start_time,
+				end_time: form.end_time,
+				title: form.title,
+				comment: form.comment,
 			});
+			setCreated(1);
+			setNotice("Бронь создана.");
 			setForm(resetForm());
-		} else {
-			setNotice({
-				text: errors.join("; "),
-				type: "error",
-			});
+		} catch (err) {
+			setNotice({ text: err.message || "Ошибка при создании", type: "error" });
 		}
 		setSeeding(0);
 	};

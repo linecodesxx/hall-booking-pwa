@@ -327,6 +327,12 @@ textarea:focus {
 	border: 1px solid #fccccc;
 }
 
+.notice.info {
+	color: #1a497a;
+	background: #e3efff;
+	border: 1px solid #b8d4fc;
+}
+
 @media (min-width: 500px) {
 	.notice {
 		padding: 13px 22px;
@@ -345,7 +351,7 @@ textarea:focus {
 
 .topbar,
 .content {
-	width: min(980px, 100%);
+	width: min(1140px, 100%);
 	margin: 0 auto;
 }
 
@@ -405,7 +411,7 @@ textarea:focus {
 	flex-direction: column;
 	align-items: center;
 	gap: 12px;
-	padding: 6px 12px 20px;
+	padding: 6px 4px 20px;
 }
 
 .content > * {
@@ -424,6 +430,39 @@ textarea:focus {
 	touch-action: pan-y;
 	user-select: none;
 	-webkit-user-select: none;
+}
+
+.schedule-layout {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 10px;
+	width: 100%;
+	max-width: 100%;
+	min-width: 0;
+}
+
+.schedule-controls {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	max-width: 800px;
+}
+
+.schedule-viewport {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 10px;
+	width: 100%;
+	max-width: 800px;
+	min-width: 0;
+}
+
+.schedule-viewport > .container:has(.hall-card) {
+	width: 100%;
 }
 
 .datebar {
@@ -529,13 +568,10 @@ textarea:focus {
 
 .segmented {
 	display: flex;
-	/* grid-auto-flow: column; */
 	gap: 6px;
 	justify-content: baseline;
 	width: auto;
 	padding: 0 auto;
-
-	margin-bottom: 10px;
 
 	overscroll-behavior-x: contain;
 	-webkit-overflow-scrolling: touch;
@@ -543,6 +579,33 @@ textarea:focus {
 	align-items: center;
 	text-align: center;
 	background: #eaf0f6;
+}
+
+.schedule-controls .segmented,
+.admin-bookings-layout .segmented {
+	margin-bottom: 0;
+}
+
+.admin-bookings-layout {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 12px;
+	width: 100%;
+	max-width: 800px;
+	margin: 0 auto;
+}
+
+.admin-bookings-layout .segmented {
+	width: fit-content;
+}
+
+.admin-bookings-layout > .card {
+	width: 100%;
+}
+
+.admin-bookings-layout > .card.empty {
+	width: 100%;
 }
 
 .segmented button {
@@ -686,6 +749,13 @@ textarea:focus {
 	}
 }
 
+.badge.new {
+	color: #fff;
+	background: #2563eb;
+	margin-bottom: 4px;
+	align-self: flex-start;
+}
+
 .badge.free {
 	color: #17613e;
 	background: #dff7e9;
@@ -798,6 +868,315 @@ textarea:focus {
 	background: #f1a932;
 }
 
+.slot.past {
+	opacity: 0.45;
+	pointer-events: none;
+}
+
+.slot.ongoing {
+	background: #e8f4fd;
+	border: 1px solid #2563eb;
+	box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
+.booking-block.past {
+	opacity: 0.35;
+}
+
+.booking-block.ongoing {
+	box-shadow:
+		0 0 0 2px #2563eb,
+		0 6px 14px rgba(31, 45, 61, 0.1);
+}
+
+.week-booking-item.past {
+	opacity: 0.4;
+}
+
+.week-booking-item.ongoing {
+	background: #e8f4fd;
+	border-color: #2563eb;
+}
+
+.range-booking.past {
+	opacity: 0.35;
+}
+
+.range-booking.ongoing {
+	box-shadow: 0 0 0 1.5px #2563eb;
+}
+
+.day-booking-item.past {
+	opacity: 0.45;
+}
+
+.day-booking-item.ongoing {
+	background: #e8f4fd;
+	border-color: #2563eb;
+}
+
+.today-grid {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	width: min(1080px, 100%);
+}
+
+.today-hero {
+	background: linear-gradient(135deg, #2563eb, #20a36b);
+	color: white;
+	text-align: center;
+	padding: 32px 24px;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 4px;
+}
+
+.today-hero h2 {
+	color: white;
+	font-size: 28px;
+	margin-bottom: 2px;
+}
+
+.today-hero p {
+	color: rgba(255, 255, 255, 0.8);
+}
+
+.today-greeting {
+	font-size: 16px;
+	font-weight: 800;
+	margin-bottom: 4px;
+	color: rgba(255, 255, 255, 0.95);
+}
+
+.today-dayname {
+	font-size: 14px;
+	font-weight: 700;
+	text-transform: capitalize;
+}
+
+.today-stats {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 12px;
+	padding: 16px;
+}
+
+.today-stat {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 14px;
+	border-radius: 16px;
+	background: #f6f8fb;
+	color: #41506a;
+	text-align: left;
+	cursor: default;
+}
+
+.today-stat svg {
+	flex-shrink: 0;
+	color: #2563eb;
+}
+
+.today-stat div {
+	display: grid;
+	gap: 2px;
+	overflow: hidden;
+}
+
+.today-stat strong {
+	font-size: 24px;
+	line-height: 1;
+}
+
+.today-stat span {
+	font-size: 12px;
+	font-weight: 800;
+	color: #728096;
+	text-transform: uppercase;
+}
+
+.today-stat-free svg {
+	color: #20a36b;
+}
+
+.today-stat-pending {
+	border: none;
+	font: inherit;
+	cursor: pointer;
+	transition: background 0.15s;
+	grid-column: span 2;
+}
+
+.today-stat-pending:hover {
+	background: #fff2cf;
+}
+
+.today-stat-pending svg {
+	color: #f59e0b;
+}
+
+.today-section-title {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 17px;
+	margin-bottom: 14px;
+}
+
+.today-section-title svg {
+	color: #2563eb;
+}
+
+.today-booking-list {
+	display: grid;
+	gap: 10px;
+}
+
+.today-booking-item {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 12px 14px;
+	border-radius: 14px;
+	background: #f6f8fb;
+	border: 1px solid #e6ebf2;
+	text-align: left;
+	cursor: pointer;
+	transition: background 0.15s;
+	width: 100%;
+	font: inherit;
+	color: inherit;
+}
+
+.today-booking-item:hover {
+	background: #edf4ff;
+}
+
+.today-booking-item .hall-dot {
+	width: 10px;
+	height: 10px;
+	flex-shrink: 0;
+}
+
+.today-booking-time-badge {
+	flex-shrink: 0;
+	min-width: 52px;
+	padding: 3px 6px;
+	border-radius: 6px;
+	background: #eef2f6;
+	font-size: 10px;
+	font-weight: 900;
+	text-align: center;
+	color: #445066;
+	line-height: 1.2;
+}
+
+.today-booking-item div {
+	display: grid;
+	gap: 2px;
+	min-width: 0;
+	overflow: hidden;
+}
+
+.today-booking-item strong {
+	font-size: 15px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.today-booking-meta {
+	font-size: 13px;
+	color: #728096;
+	font-weight: 700;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.today-booking-item.ongoing {
+	background: #e8f4fd;
+	border-color: #2563eb;
+}
+
+.today-empty {
+	text-align: center;
+	padding: 32px 20px;
+	display: grid;
+	gap: 14px;
+}
+
+.today-empty p {
+	font-size: 15px;
+}
+
+.today-empty-small {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 10px;
+	padding: 28px 16px;
+	color: #8b95a5;
+	text-align: center;
+}
+
+.today-empty-small svg {
+	color: #c5cdd9;
+}
+
+.today-empty-small p {
+	font-size: 14px;
+	margin: 0;
+	color: #8b95a5;
+}
+
+.today-hero-text {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 2px;
+}
+
+.today-pending-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	margin-top: 10px;
+	padding: 8px 14px;
+	border-radius: 12px;
+	background: rgba(255, 255, 255, 0.2);
+	color: white;
+	font-weight: 800;
+	font-size: 13px;
+	cursor: pointer;
+	border: none;
+	transition: background 0.15s;
+}
+
+.today-pending-badge:hover {
+	background: rgba(255, 255, 255, 0.3);
+}
+
+.today-date-group {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.today-date-heading {
+	font-size: 13px;
+	font-weight: 900;
+	color: #647084;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	margin: 8px 0 2px;
+	padding: 4px 0;
+	border-bottom: 1px solid #eef2f7;
+}
+
 .agenda {
 	display: grid;
 	gap: 12px;
@@ -834,10 +1213,15 @@ textarea:focus {
 
 .calendar-scroll {
 	width: 100%;
+	max-width: 100%;
 	overflow-x: auto;
 	overflow-y: hidden;
 	padding-bottom: 6px;
 	overscroll-behavior-x: contain;
+}
+
+.schedule-viewport .calendar-scroll {
+	max-width: 800px;
 }
 
 .calendar-grid {
@@ -1033,16 +1417,9 @@ textarea:focus {
 
 .range-calendar {
 	display: grid;
-	width: 1000px;
+	width: 100%;
+	max-width: 800px;
 	gap: 10px;
-}
-
-@media (max-width: 500px) {
-	.range-calendar {
-	display: grid;
-	width: 320px;
-	gap: 10px;
-}
 }
 
 .range-grid {
@@ -1080,6 +1457,27 @@ textarea:focus {
 
 .week-day-label:hover {
 	background: #f0f4fa;
+}
+
+.week-day-add {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 6px 12px;
+	border: 1px dashed #c5cdd9;
+	border-radius: 8px;
+	background: transparent;
+	color: #8b95a5;
+	font-size: 12px;
+	font-weight: 700;
+	cursor: pointer;
+	transition: all 0.15s;
+}
+
+.week-day-add:hover {
+	border-color: #2563eb;
+	color: #2563eb;
+	background: #f0f6ff;
 }
 
 .week-day-name {
@@ -1374,11 +1772,13 @@ textarea:focus {
 	border-radius: 20px;
 	padding: 16px;
 	gap: 8px;
+	margin-bottom: 8px;
 }
 
 @media (min-width: 500px) {
 	.booking-card {
 		gap: 10px;
+		margin-bottom: 10px;
 	}
 }
 
@@ -1520,6 +1920,28 @@ textarea:focus {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.nav-badge {
+	position: absolute;
+	top: -2px;
+	right: -6px;
+	background: #e11d48;
+	color: #fff;
+	font-size: 10px;
+	font-weight: 900;
+	min-width: 16px;
+	height: 16px;
+	padding: 0 4px;
+	border-radius: 999px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	line-height: 1;
+}
+
+.bottom-nav button {
+	position: relative;
 }
 
 @media (min-width: 500px) {
@@ -1798,7 +2220,7 @@ body {
 	/* Center everything with max-width */
 	.topbar,
 	.content {
-		width: min(1140px, 100%);
+		width: min(1400px, 100%);
 	}
 
 	.bottom-nav {
@@ -1996,13 +2418,17 @@ body {
 		min-width: 100px;
 	}
 
-	.swipe-area {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 14px;
+	.schedule-viewport {
+		max-width: 900px;
+	}
+
+	.schedule-viewport .hall-card {
 		width: 100%;
-		max-width: 800px;
+	}
+
+	.schedule-viewport > .container:has(.hall-card) {
+		width: 100%;
+		grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
 	}
 
 	/* Scrollbar */
@@ -2017,6 +2443,83 @@ body {
 
 	.week-calendar .week-grid {
 		gap: 12px;
+	}
+
+	/* Hall cards — tile layout on desktop */
+	.hall-card {
+		break-inside: avoid;
+	}
+
+	.container:has(.hall-card) {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+		align-items: start;
+		gap: 16px;
+	}
+
+	/* Today page — tile layout */
+	.today-grid {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 16px;
+		padding: 8px 0;
+	}
+
+	.today-grid > .card {
+		margin: 0;
+	}
+
+	.today-hero {
+		grid-column: 1 / -1;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		text-align: left;
+		padding: 20px 28px;
+		border-radius: 18px;
+	}
+
+	.today-hero h2 {
+		font-size: 22px;
+		margin: 0;
+	}
+
+	.today-greeting {
+		margin: 0;
+		font-size: 13px;
+	}
+
+	.today-dayname {
+		font-size: 12px;
+	}
+
+	.today-stats {
+		grid-column: 1 / -1;
+		grid-template-columns: repeat(4, 1fr);
+		padding: 12px;
+		gap: 12px;
+	}
+
+	.today-stat-pending {
+		grid-column: auto;
+	}
+
+	.today-section-ongoing,
+	.today-section-upcoming {
+		align-self: start;
+	}
+
+	.today-section-ongoing {
+		grid-column: 1;
+	}
+
+	.today-section-upcoming {
+		grid-column: 2;
+	}
+
+	.today-booking-list {
+		max-height: 400px;
+		overflow-y: auto;
 	}
 }
 

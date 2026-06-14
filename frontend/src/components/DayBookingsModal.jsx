@@ -25,7 +25,7 @@ export function DayBookingsModal({ date, bookings, onCreateBooking, onBookingCli
 								{bookings.map((booking) => (
 									<button
 										key={booking.id}
-										className="day-booking-item"
+										className={`day-booking-item ${booking.temporal_status}`}
 										onClick={() => {
 											onBookingClick(booking);
 											onClose();

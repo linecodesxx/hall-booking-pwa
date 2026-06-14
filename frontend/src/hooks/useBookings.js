@@ -8,6 +8,7 @@ const tempId = () => `optimistic-${++tempIdCounter}`;
 function updateBookingsCache(qc, id, updates) {
 	const queries = qc.getQueriesData({ queryKey: ["bookings"] });
 	for (const [key, data] of queries) {
+		if (!Array.isArray(data)) continue;
 		qc.setQueryData(key, (old) =>
 			old?.map((b) => (b.id === id ? { ...b, ...updates } : b)),
 		);
@@ -47,6 +48,26 @@ export function useBookings(status) {
 			api(`/api/bookings${status ? `?status=${status}` : ""}`).then(
 				(d) => d.bookings || [],
 			),
+	});
+}
+
+export function useUnreadCount() {
+	return useQuery({
+		queryKey: ["unread-count"],
+		queryFn: () =>
+			api("/api/bookings?status=pending").then((d) => d.unread_count || 0),
+	});
+}
+
+export function useMarkSeen() {
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: () =>
+			api("/api/bookings/mark-seen", { method: "PATCH", body: "{}" }),
+		onSuccess: () => {
+			qc.invalidateQueries({ queryKey: ["bookings"] });
+			qc.invalidateQueries({ queryKey: ["unread-count"] });
+		},
 	});
 }
 
@@ -95,6 +116,26 @@ export function useCreateBooking(role) {
 		onSettled: () => {
 			qc.invalidateQueries({ queryKey: ["bookings"] });
 			qc.invalidateQueries({ queryKey: ["schedule"] });
+			qc.invalidateQueries({ queryKey: ["unread-count"] });
+		},
+	});
+}
+
+export function useCreateBookingBatch() {
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: (bookings) =>
+			api("/api/bookings/batch", {
+				method: "POST",
+				body: JSON.stringify({ bookings }),
+			}),
+		onError: (_err, _vars, context) => {
+			if (context?.prev) qc.setQueryData(context.key, context.prev);
+		},
+		onSettled: () => {
+			qc.invalidateQueries({ queryKey: ["bookings"] });
+			qc.invalidateQueries({ queryKey: ["schedule"] });
+			qc.invalidateQueries({ queryKey: ["unread-count"] });
 		},
 	});
 }
@@ -124,6 +165,7 @@ export function useUpdateBooking() {
 		onSettled: () => {
 			qc.invalidateQueries({ queryKey: ["bookings"] });
 			qc.invalidateQueries({ queryKey: ["schedule"] });
+			qc.invalidateQueries({ queryKey: ["unread-count"] });
 		},
 	});
 }
@@ -182,6 +224,83 @@ export function useApproveBooking() {
 		onSettled: () => {
 			qc.invalidateQueries({ queryKey: ["bookings"] });
 			qc.invalidateQueries({ queryKey: ["schedule"] });
+			qc.invalidateQueries({ queryKey: ["unread-count"] });
+		},
+	});
+}
+
+export function useApproveGroup() {
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: ({ groupId, comment }) =>
+			api(`/api/bookings/group/${groupId}/approve`, {
+				method: "PATCH",
+				body: JSON.stringify({ admin_comment: comment || "" }),
+			}),
+		onMutate: async ({ groupId }) => {
+			await qc.cancelQueries({ queryKey: ["bookings"] });
+			await qc.cancelQueries({ queryKey: ["schedule"] });
+			const queries = qc.getQueriesData({ queryKey: ["bookings"] });
+			const prev = Object.fromEntries(queries);
+			for (const [key, data] of queries) {
+				if (!Array.isArray(data)) continue;
+				qc.setQueryData(key, (old) =>
+					old?.map((b) =>
+						b.group_id === groupId && b.status === "pending"
+							? { ...b, status: "approved" }
+							: b,
+					),
+				);
+			}
+			return { prev };
+		},
+		onError: (_err, _id, context) => {
+			if (context?.prev)
+				for (const [key, data] of Object.entries(context.prev))
+					qc.setQueryData(key, data);
+		},
+		onSettled: () => {
+			qc.invalidateQueries({ queryKey: ["bookings"] });
+			qc.invalidateQueries({ queryKey: ["schedule"] });
+			qc.invalidateQueries({ queryKey: ["unread-count"] });
+		},
+	});
+}
+
+export function useRejectGroup() {
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: ({ groupId, comment }) =>
+			api(`/api/bookings/group/${groupId}/reject`, {
+				method: "PATCH",
+				body: JSON.stringify({ admin_comment: comment || "" }),
+			}),
+		onMutate: async ({ groupId }) => {
+			await qc.cancelQueries({ queryKey: ["bookings"] });
+			await qc.cancelQueries({ queryKey: ["schedule"] });
+			const queries = qc.getQueriesData({ queryKey: ["bookings"] });
+			const prev = Object.fromEntries(queries);
+			for (const [key, data] of queries) {
+				if (!Array.isArray(data)) continue;
+				qc.setQueryData(key, (old) =>
+					old?.map((b) =>
+						b.group_id === groupId && b.status === "pending"
+							? { ...b, status: "rejected" }
+							: b,
+					),
+				);
+			}
+			return { prev };
+		},
+		onError: (_err, _id, context) => {
+			if (context?.prev)
+				for (const [key, data] of Object.entries(context.prev))
+					qc.setQueryData(key, data);
+		},
+		onSettled: () => {
+			qc.invalidateQueries({ queryKey: ["bookings"] });
+			qc.invalidateQueries({ queryKey: ["schedule"] });
+			qc.invalidateQueries({ queryKey: ["unread-count"] });
 		},
 	});
 }
@@ -211,6 +330,7 @@ export function useRejectBooking() {
 		onSettled: () => {
 			qc.invalidateQueries({ queryKey: ["bookings"] });
 			qc.invalidateQueries({ queryKey: ["schedule"] });
+			qc.invalidateQueries({ queryKey: ["unread-count"] });
 		},
 	});
 }

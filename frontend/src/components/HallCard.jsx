@@ -5,9 +5,12 @@ export function HallCard({ hall, date, go, onBookingClick }) {
 	const bookings = h.bookings || [];
 	const approved = bookings.filter((b) => b.status === "approved");
 	const first = approved[0];
-	const freeText = approved.length
-		? `Свободно до ${first.start_time}`
-		: "Свободно весь день";
+	const ongoing = bookings.some((b) => b.temporal_status === "ongoing");
+	const freeText = ongoing
+		? "Идёт сейчас"
+		: approved.length
+			? `Свободно до ${first.start_time}`
+			: "Свободно весь день";
 	return (
 		<article className="card hall-card">
 			<div className="card-head">
@@ -24,7 +27,7 @@ export function HallCard({ hall, date, go, onBookingClick }) {
 				{bookings.length ? (
 					bookings.map((booking) => (
 						<button
-							className="slot"
+							className={`slot ${booking.temporal_status}`}
 							key={booking.id}
 							onClick={() => onBookingClick(booking)}
 						>

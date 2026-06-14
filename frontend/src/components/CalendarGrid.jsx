@@ -83,7 +83,7 @@ export function CalendarGrid({ halls, date, go, onCellClick, onBookingClick }) {
 									60;
 								return (
 									<button
-										className={`booking-block ${booking.status}`}
+										className={`booking-block ${booking.status} ${booking.temporal_status}`}
 										key={booking.id}
 										style={{
 											top: `calc(${topHours} * var(--row-height))`,
