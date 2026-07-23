@@ -5,10 +5,12 @@ module.exports = {
 		{
 			name: "hall-booking-backend",
 			script: "./backend/server.js",
+			node_args: "--import ./backend/samara-time-preload.js",
 			instances: 1,
 			exec_mode: "fork",
 			env: {
 				NODE_ENV: "production",
+				APP_TIME_ZONE: "Europe/Samara",
 			},
 			env_file: "./backend/.env",
 			watch: false,
