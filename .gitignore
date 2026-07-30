@@ -17,3 +17,4 @@ tests/screenshots/
 tests/ss/
 .vite/
 *.tsbuildinfo
+backend/vapid.json

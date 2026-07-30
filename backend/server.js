@@ -33,6 +33,7 @@ webpush.setVapidDetails(
 const app = express();
 const PORT = Number(process.env.PORT || 3001);
 const JWT_SECRET = process.env.JWT_SECRET || "change_me";
+const PUSH_ENABLED = process.env.PUSH_ENABLED === "true";
 
 app.use(cors({ origin: process.env.CORS_ORIGIN || "*" }));
 app.options("*", cors({ origin: process.env.CORS_ORIGIN || "*" }));
@@ -198,6 +199,7 @@ function publicBooking(row, viewer) {
 }
 
 function sendPush(userId, payload) {
+	if (!PUSH_ENABLED) return;
 	const subs = db
 		.prepare("SELECT * FROM push_subscriptions WHERE user_id = ?")
 		.all(userId);
@@ -324,18 +326,20 @@ function tryNotifyBookingEnd() {
 	}
 }
 
-setInterval(() => {
-	try {
-		tryNotifyBookingStart();
-	} catch (e) {
-		console.error("push start error:", e.message);
-	}
-	try {
-		tryNotifyBookingEnd();
-	} catch (e) {
-		console.error("push end error:", e.message);
-	}
-}, 30_000);
+if (PUSH_ENABLED) {
+	setInterval(() => {
+		try {
+			tryNotifyBookingStart();
+		} catch (e) {
+			console.error("push start error:", e.message);
+		}
+		try {
+			tryNotifyBookingEnd();
+		} catch (e) {
+			console.error("push end error:", e.message);
+		}
+	}, 30_000);
+}
 
 /** POST /api/auth/login — Вход/регистрация пользователя
  * Если пользователь существует — проверяет пароль и обновляет роль по инвайт-коду.
@@ -1016,6 +1020,9 @@ app.delete(
 /** GET /api/push/vapid-key — Публичный VAPID-ключ для подписки
  * Ответ: { publicKey: "..." } */
 app.get("/api/push/vapid-key", (_req, res) => {
+	if (!PUSH_ENABLED) {
+		return res.status(503).json({ error: "Push-уведомления отключены" });
+	}
 	res.json({ publicKey: vapidKeys.publicKey });
 });
 
@@ -1025,6 +1032,9 @@ app.post(
 	"/api/push/subscribe",
 	requireAuth,
 	asyncHandler(async (req, res) => {
+		if (!PUSH_ENABLED) {
+			return res.status(503).json({ error: "Push-уведомления отключены" });
+		}
 		const { endpoint, keys } = req.body;
 		if (!endpoint || !keys?.p256dh || !keys?.auth)
 			throw badRequest("Invalid subscription");

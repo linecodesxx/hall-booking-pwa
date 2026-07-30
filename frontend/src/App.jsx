@@ -1,4 +1,4 @@
-import { Bell, BellRing, LogOut, RefreshCw } from "lucide-react";
+import { Bell, LogOut, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BottomNav, ErrorBoundary, FormSkeleton } from "./components";
 import { useHashRoute } from "./hooks/useHashRoute";
@@ -15,6 +15,8 @@ import {
 	Today,
 } from "./pages";
 import { tokenStore, urlBase64ToUint8Array } from "./utils";
+
+const PUSH_ENABLED = import.meta.env.VITE_PUSH_ENABLED === "true";
 
 function PageRouter({ route, go, user, setNotice }) {
 	const query = route.includes("?")
@@ -146,6 +148,7 @@ export function App() {
 	}, []);
 
 	async function subscribePush() {
+		if (!PUSH_ENABLED) return;
 		if (!("serviceWorker" in navigator) || Notification.permission === "denied") return;
 		try {
 			const reg = await navigator.serviceWorker.ready;
@@ -173,6 +176,7 @@ export function App() {
 	}
 
 	useEffect(() => {
+		if (!PUSH_ENABLED) return;
 		if (!user || !("serviceWorker" in navigator)) return;
 		if (Notification.permission === "granted") {
 			subscribePush();
@@ -226,7 +230,7 @@ export function App() {
 					<h1>{route === "/today" || route === "/" ? "Главная" : route === "/schedule" ? "Расписание" : route === "/my-bookings" ? "Мои заявки" : route === "/new-booking" ? "Новая бронь" : route.startsWith("/admin") ? "Админ-панель" : "Расписание"}</h1>
 				</div>
 			<div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-				{"Notification" in window && Notification.permission === "default" && (
+					{PUSH_ENABLED && "Notification" in window && Notification.permission === "default" && (
 					<button className="icon-button" onClick={subscribePush} aria-label="Включить уведомления" title="Включить уведомления о новых заявках">
 						<Bell size={18} />
 					</button>

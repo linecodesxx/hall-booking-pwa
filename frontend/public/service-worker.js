@@ -69,39 +69,3 @@ async function networkFirst(request) {
     });
   }
 }
-
-self.addEventListener('push', (event) => {
-  let data = { title: 'Бронирование залов', body: '', icon: '/icon.svg', data: {} };
-  try {
-    if (event.data) data = event.data.json();
-  } catch {}
-  event.waitUntil(
-    self.registration.showNotification(data.title, {
-      body: data.body,
-      icon: data.icon,
-      badge: '/icon.svg',
-      data: data.data,
-      vibrate: [200, 100, 200],
-      tag: 'hall-booking',
-      renotify: true,
-      requireInteraction: true,
-    })
-  );
-});
-
-self.addEventListener('notificationclick', (event) => {
-  event.notification.close();
-  const url = event.notification.data?.url || '/';
-  event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      for (const client of clientList) {
-        const clientUrl = new URL(client.url);
-        const targetUrl = new URL(url, self.location.origin);
-        if (clientUrl.pathname === targetUrl.pathname && 'focus' in client) {
-          return client.focus();
-        }
-      }
-      return clients.openWindow(url);
-    })
-  );
-});
