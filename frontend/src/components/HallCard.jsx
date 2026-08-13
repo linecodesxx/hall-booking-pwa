@@ -1,57 +1,52 @@
-import { labels } from "../utils";
+import { labels } from '../utils';
 
 export function HallCard({ hall, date, go, onBookingClick }) {
-	const h = hall || {};
-	const bookings = h.bookings || [];
-	const approved = bookings.filter((b) => b.status === "approved");
-	const first = approved[0];
-	const ongoing = bookings.some((b) => b.temporal_status === "ongoing");
-	const freeText = ongoing
-		? "Идёт сейчас"
-		: approved.length
-			? `Свободно до ${first.start_time}`
-			: "Свободно весь день";
-	return (
-		<article className="card hall-card">
-			<div className="card-head">
-				<div>
-					<h2>{h.name}</h2>
-					<p>{h.description}</p>
-				</div>
-				<span className={`badge ${approved.length ? "busy" : "free"}`}>
-					{approved.length ? "Есть бронь" : "Свободно"}
-				</span>
-			</div>
-			<p className="free-line">{freeText}</p>
-			<div className="slots">
-				{bookings.length ? (
-					bookings.map((booking) => (
-						<button
-							className={`slot ${booking.temporal_status}`}
-							key={booking.id}
-							onClick={() => onBookingClick(booking)}
-						>
-							<span>
-								{booking.start_time}-{booking.end_time}
-							</span>
-							<strong>
-								{booking.status === "approved"
-									? booking.title || "Занято"
-									: labels[booking.status]}
-							</strong>
-							<em className={`dot ${booking.status}`}></em>
-						</button>
-					))
-				) : (
-					<p className="muted">Подтверждённых и ожидающих заявок нет.</p>
-				)}
-			</div>
-			<button
-				className="primary"
-				onClick={() => go(`/new-booking?hall_id=${h.id}&date=${date}`)}
-			>
-				Забронировать
-			</button>
-		</article>
-	);
+  const h = hall || {};
+  const bookings = h.bookings || [];
+  const approved = bookings.filter((b) => b.status === 'approved');
+  const first = approved[0];
+  const ongoing = bookings.some((b) => b.temporal_status === 'ongoing');
+  const freeText = ongoing
+    ? 'Идёт сейчас'
+    : approved.length
+      ? `Свободно до ${first.start_time}`
+      : 'Свободно весь день';
+  return (
+    <article className="card hall-card">
+      <div className="card-head">
+        <div>
+          <h2>{h.name}</h2>
+          <p>{h.description}</p>
+        </div>
+        <span className={`badge ${approved.length ? 'busy' : 'free'}`}>
+          {approved.length ? 'Есть бронь' : 'Свободно'}
+        </span>
+      </div>
+      <p className="free-line">{freeText}</p>
+      <div className="slots">
+        {bookings.length ? (
+          bookings.map((booking) => (
+            <button
+              className={`slot ${booking.temporal_status}`}
+              key={booking.id}
+              onClick={() => onBookingClick(booking)}
+            >
+              <span>
+                {booking.start_time}-{booking.end_time}
+              </span>
+              <strong>
+                {booking.status === 'approved' ? booking.title || 'Занято' : labels[booking.status]}
+              </strong>
+              <em className={`dot ${booking.status}`}></em>
+            </button>
+          ))
+        ) : (
+          <p className="muted">Подтверждённых и ожидающих заявок нет.</p>
+        )}
+      </div>
+      <button className="primary" onClick={() => go(`/new-booking?hall_id=${h.id}&date=${date}`)}>
+        Забронировать
+      </button>
+    </article>
+  );
 }

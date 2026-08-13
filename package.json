@@ -1,6 +1,10 @@
 {
 	"scripts": {
+		"install:all": "npm ci && npm --prefix backend ci && npm --prefix frontend ci",
+		"build": "npm --prefix frontend run build",
 		"lint": "biome check frontend/src backend ecosystem.config.js",
+		"check": "npm run lint && npm run build && npm run test:backend",
+		"test:backend": "node tests/backend.test.mjs",
 		"format": "biome check --write frontend/src backend ecosystem.config.js",
 		"lint:all": "biome check frontend/src backend ecosystem.config.js package.json",
 		"format:all": "biome check --write frontend/src backend ecosystem.config.js package.json"

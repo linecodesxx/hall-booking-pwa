@@ -1,230 +1,337 @@
-# PWA бронирования залов
+# Hall Booking PWA
 
-Полноценное веб-приложение для закрытой группы: пользователи отправляют заявки на бронирование залов, администратор подтверждает или отклоняет их. Фронтенд — React 18, backend — Node.js + Express, база — SQLite через `better-sqlite3`, авторизация — JWT на 30 дней.
+Приложение для бронирования помещений: пользователи создают заявки, администраторы
+подтверждают или отклоняют их. Frontend — React/Vite, API — Node.js/Express,
+хранилище — файловая SQLite-совместимая база `sql.js`.
 
-## Структура
+Поддерживаются два способа запуска:
+
+- локально или внутри сети — Docker Compose на `http://localhost:8080`;
+- на VPS с доменом — Docker Compose за системным Nginx с HTTPS от Certbot.
+
+## Production: VPS, домен, Nginx и HTTPS
+
+Ниже приведён полный сценарий для чистого Ubuntu 24.04. Вместо
+`booking.example.org` используйте свой домен.
+
+### 1. Подготовьте DNS и сервер
+
+Создайте у DNS-провайдера запись:
 
 ```text
-/
-├── backend/
-│   ├── server.js
-│   ├── db.js
-│   ├── middleware.js
-│   ├── .env.example
-│   └── package.json
-├── frontend/
-│   ├── public/
-│   │   ├── index.html
-│   │   ├── manifest.json
-│   │   ├── service-worker.js
-│   │   ├── icon-192.png
-│   │   └── icon-512.png
-│   ├── src/
-│   │   ├── index.js
-│   │   ├── App.js
-│   │   ├── api.js
-│   │   ├── context/AuthContext.js
-│   │   ├── pages/LoginPage.js
-│   │   ├── pages/BookingsPage.js
-│   │   ├── pages/AdminPage.js
-│   │   └── components/BookingForm.js
-│   └── package.json
-└── README.md
+Тип: A
+Имя: booking
+Значение: публичный IPv4-адрес VPS
 ```
 
-## Локальный запуск
+Если сервер использует IPv6, также создайте `AAAA`. До выпуска сертификата
+проверьте, что домен уже указывает на VPS:
 
 ```bash
-cd backend
-cp .env.example .env
-npm install
-npm start
+getent ahosts booking.example.org
 ```
 
-Во втором терминале:
+Откройте только SSH, HTTP и HTTPS. Порт `8080` наружу открывать не нужно:
 
 ```bash
-cd frontend
-npm install
-npm start
+sudo ufw allow OpenSSH
+sudo ufw allow 'Nginx Full'
+sudo ufw enable
+sudo ufw status
 ```
 
-Для разработки React dev server обычно работает на `http://localhost:3000`, backend — на `http://localhost:3001`.
+### 2. Установите Docker, Nginx и Certbot
 
-## Установка Node.js 18 на Ubuntu
+Установите Docker Engine и Compose Plugin по инструкции вашей ОС, затем:
 
 ```bash
 sudo apt update
-sudo apt install -y curl ca-certificates gnupg
-curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-sudo apt install -y nodejs build-essential
-node -v
-npm -v
+sudo apt install -y nginx certbot python3-certbot-nginx git openssl
+sudo systemctl enable --now docker nginx
+docker --version
+docker compose version
 ```
 
-## Установка зависимостей
+Пользователь, выполняющий развёртывание, должен иметь доступ к Docker. Можно
+запускать Docker-команды через `sudo` или добавить пользователя в группу `docker`.
+
+### 3. Скачайте и настройте приложение
 
 ```bash
-cd /var/www/hall-booking/backend
-npm install
-
-cd /var/www/hall-booking/frontend
-npm install
+sudo mkdir -p /opt/hall-booking
+sudo chown "$USER":"$USER" /opt/hall-booking
+git clone YOUR_REPOSITORY_URL /opt/hall-booking/app
+cd /opt/hall-booking/app
+cp backend/.env.example backend/.env
+openssl rand -hex 32
+openssl rand -hex 16
+openssl rand -hex 16
 ```
 
-## Настройка `.env`
-
-```bash
-cd /var/www/hall-booking/backend
-cp .env.example .env
-nano .env
-```
-
-Пример:
+Первая строка генерации предназначена для `JWT_SECRET`, следующие две — для
+пользовательского и администраторского invite-кодов. Запишите значения в
+`backend/.env`:
 
 ```env
+NODE_ENV=production
 PORT=3001
-JWT_SECRET=замените_на_очень_длинную_случайную_строку_32_символа_или_больше
-INVITE_CODE=AGAPE2026
-ADMIN_INVITE_CODE=ADMIN777
-DB_FILE=./data.sqlite
+JWT_SECRET=ВСТАВЬТЕ_СЮДА_64_СЛУЧАЙНЫХ_HEX_СИМВОЛА
+USER_INVITE_CODE=ОТДЕЛЬНЫЙ_СЛУЧАЙНЫЙ_КОД
+ADMIN_INVITE_CODE=ЕЩЁ_ОДИН_ОТДЕЛЬНЫЙ_КОД
+CORS_ORIGIN=https://booking.example.org
+APP_TIME_ZONE=Europe/Moscow
+DB_FILE=./data/app.db
+DOMAIN=booking.example.org
+PUSH_ENABLED=false
+VAPID_FILE=./data/vapid.json
+TRUST_PROXY=2
+LOGIN_RATE_LIMIT=50
 ```
 
-`INVITE_CODE` используется для обычных пользователей. `ADMIN_INVITE_CODE` создаёт или повышает пользователя до администратора.
+`USER_INVITE_CODE` и `ADMIN_INVITE_CODE` обязательно должны различаться.
+`APP_TIME_ZONE` — часовой пояс IANA вашей организации.
 
-## Сборка frontend
+Защитите файл с секретами и запустите контейнеры:
 
 ```bash
-cd /var/www/hall-booking/frontend
-npm run build
+chmod 600 backend/.env
+docker compose up -d --build
+docker compose ps
+curl --fail http://127.0.0.1:8080/api/health
 ```
 
-После сборки статические файлы будут лежать в `frontend/build`.
+Compose публикует приложение только на `127.0.0.1:8080`, поэтому обойти Nginx и
+HTTPS извне нельзя. Backend вообще не публикует отдельный порт.
 
-## Запуск backend через PM2
+### 4. Подключите системный Nginx
+
+В репозитории уже есть готовый конфиг
+`deploy/nginx/hall-booking.conf`. Скопируйте его и замените домен:
 
 ```bash
-sudo npm install -g pm2
-cd /var/www/hall-booking/backend
-pm2 start server.js --name hall-booking-api
-pm2 save
-pm2 startup
-```
-
-Команды управления:
-
-```bash
-pm2 status
-pm2 logs hall-booking-api
-pm2 restart hall-booking-api
-```
-
-## Конфиг Nginx
-
-Установите Nginx:
-
-```bash
-sudo apt install -y nginx
-```
-
-Создайте файл:
-
-```bash
-sudo nano /etc/nginx/sites-available/hall-booking
-```
-
-Пример конфига, замените `example.org` на свой домен:
-
-```nginx
-server {
-    listen 80;
-    server_name example.org www.example.org;
-
-    root /var/www/hall-booking/frontend/build;
-    index index.html;
-
-    location /api/ {
-        proxy_pass http://127.0.0.1:3001/api/;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    location /ws {
-        proxy_pass http://127.0.0.1:3001;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    location / {
-        try_files $uri /index.html;
-    }
-}
-```
-
-Активируйте сайт:
-
-```bash
-sudo ln -s /etc/nginx/sites-available/hall-booking /etc/nginx/sites-enabled/hall-booking
+BOOKING_DOMAIN=booking.example.org
+sudo cp deploy/nginx/hall-booking.conf /etc/nginx/sites-available/hall-booking
+sudo sed -i "s/booking\\.example\\.org/${BOOKING_DOMAIN}/g" \
+  /etc/nginx/sites-available/hall-booking
+sudo ln -s /etc/nginx/sites-available/hall-booking \
+  /etc/nginx/sites-enabled/hall-booking
 sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-## HTTPS через certbot
+В переменной `BOOKING_DOMAIN` укажите свой настоящий домен.
+Если `/etc/nginx/sites-enabled/default` перехватывает запросы, отключите его:
 
 ```bash
-sudo apt install -y certbot python3-certbot-nginx
-sudo certbot --nginx -d example.org -d www.example.org
-sudo systemctl status certbot.timer
+sudo unlink /etc/nginx/sites-enabled/default
+sudo nginx -t
+sudo systemctl reload nginx
 ```
 
-PWA на Android и iOS должна открываться по HTTPS. На iPhone откройте сайт в Safari, нажмите «Поделиться» и выберите «На экран Домой». На Android откройте сайт в Chrome и выберите «Установить приложение» или «Добавить на главный экран».
-
-## Бэкап SQLite
-
-По умолчанию база находится в `backend/data.sqlite`, если `DB_FILE` не изменён.
-
-Создать папку для бэкапов:
+Проверьте HTTP до выпуска сертификата:
 
 ```bash
-sudo mkdir -p /var/backups/hall-booking
-sudo chown $USER:$USER /var/backups/hall-booking
+curl --fail http://booking.example.org/api/health
 ```
 
-Ручной бэкап:
+Конфиг отдельно обрабатывает `/ws`, включая заголовки WebSocket Upgrade. Остальные
+запросы отправляются во frontend-контейнер, который раздаёт PWA и проксирует `/api` в
+backend-контейнер.
+
+### 5. Выпустите HTTPS-сертификат
 
 ```bash
-sqlite3 /var/www/hall-booking/backend/data.sqlite ".backup '/var/backups/hall-booking/data-$(date +%F-%H%M).sqlite'"
+sudo certbot --nginx -d booking.example.org \
+  --redirect --agree-tos --no-eff-email -m admin@example.org
 ```
 
-Сжатый бэкап:
+Замените домен и email. Certbot дополнит Nginx-конфиг SSL-настройками и включит
+перенаправление HTTP → HTTPS. Проверьте:
 
 ```bash
-sqlite3 /var/www/hall-booking/backend/data.sqlite ".backup '/tmp/hall-booking.sqlite'"
-gzip -c /tmp/hall-booking.sqlite > "/var/backups/hall-booking/data-$(date +%F-%H%M).sqlite.gz"
-rm /tmp/hall-booking.sqlite
+sudo nginx -t
+curl --fail https://booking.example.org/api/health
+sudo certbot renew --dry-run
+systemctl status certbot.timer
 ```
 
-Восстановление:
+После этого откройте `https://booking.example.org`. PWA и браузерные push-уведомления
+работают только в безопасном HTTPS-контексте.
+
+Чтобы включить push, установите `PUSH_ENABLED=true` в `backend/.env` и пересоберите
+frontend с той же возможностью:
 
 ```bash
-pm2 stop hall-booking-api
-cp /var/backups/hall-booking/data-YYYY-MM-DD-HHMM.sqlite /var/www/hall-booking/backend/data.sqlite
-pm2 start hall-booking-api
+VITE_PUSH_ENABLED=true docker compose up -d --build
 ```
 
-## Важные замечания
+Для последующих сборок также передавайте `VITE_PUSH_ENABLED=true` либо запишите
+`VITE_PUSH_ENABLED=true` в корневой файл `/opt/hall-booking/app/.env`.
 
-- JWT живёт 30 дней.
-- При ответе API `401` frontend автоматически удаляет токен и отправляет пользователя на `/login`.
-- Конфликт бронирования проверяется только с подтверждёнными заявками.
-- При подтверждении заявки конфликт проверяется повторно.
-- Удаление зала — мягкое: `active = 0`.
-- Интерфейс сделан mobile-first и рассчитан на экран шириной 375px.
+### 6. Создайте первого администратора
+
+Откройте форму входа и зарегистрируйтесь с `ADMIN_INVITE_CODE`. После создания
+первого администратора рекомендуется заменить этот код в `backend/.env` и применить
+настройку:
+
+```bash
+docker compose up -d --force-recreate backend
+```
+
+Пользователям передавайте только `USER_INVITE_CODE`.
+
+## Локальный запуск через Docker
+
+```bash
+cp backend/.env.example backend/.env
+```
+
+Для локального запуска установите `NODE_ENV=development`,
+`CORS_ORIGIN=http://localhost:8080`, поменяйте все три секрета и выполните:
+
+```bash
+docker compose up -d --build
+curl --fail http://localhost:8080/api/health
+```
+
+Приложение будет доступно на `http://localhost:8080` только с самого компьютера.
+Чтобы открыть его другим устройствам локальной сети, осознанно замените bind в
+`docker-compose.yml` с `127.0.0.1:8080:80` на `8080:80` и настройте firewall.
+
+## Обновление production
+
+Сначала создайте резервную копию, затем:
+
+```bash
+cd /opt/hall-booking/app
+git pull --ff-only
+docker compose build --pull
+docker compose up -d
+docker compose ps
+curl --fail https://booking.example.org/api/health
+```
+
+Не запускайте несколько экземпляров backend: файловая база рассчитана на один
+процесс.
+
+## Резервная копия и восстановление
+
+Создание согласованной копии базы:
+
+```bash
+cd /opt/hall-booking/app
+mkdir -p backups
+docker compose stop backend
+docker compose cp backend:/app/data/app.db \
+  "backups/app-$(date +%F-%H%M).db"
+docker compose start backend
+```
+
+Если включены push-уведомления, VAPID-ключ уже находится в том же постоянном volume.
+При необходимости отдельно извлеките его:
+
+```bash
+docker compose cp backend:/app/data/vapid.json \
+  "backups/vapid-$(date +%F-%H%M).json"
+```
+
+Восстановление базы:
+
+```bash
+docker compose stop backend
+docker compose cp backups/app-YYYY-MM-DD-HHMM.db backend:/app/data/app.db
+docker compose start backend
+curl --fail http://127.0.0.1:8080/api/health
+```
+
+Копии нужно хранить вне VPS и периодически проверять восстановление.
+
+## Диагностика
+
+```bash
+docker compose ps
+docker compose logs --tail=200 backend
+docker compose logs --tail=200 frontend
+curl -i http://127.0.0.1:8080/api/health
+sudo nginx -t
+sudo tail -n 200 /var/log/nginx/error.log
+sudo certbot certificates
+```
+
+Типичные причины проблем:
+
+- `502 Bad Gateway` — контейнеры не запущены или frontend unhealthy;
+- сайт работает, но realtime нет — в Nginx потеряны WebSocket-заголовки `/ws`;
+- CORS-ошибка — `CORS_ORIGIN` не совпадает с полным HTTPS-адресом;
+- сертификат не выпускается — DNS ещё не обновился либо закрыты порты 80/443;
+- неверное локальное время — ошибочно задан `APP_TIME_ZONE`.
+
+## Запуск без Docker
+
+Требуются Node.js 22 LTS, Nginx и PM2:
+
+```bash
+npm run install:all
+cp backend/.env.example backend/.env
+# настройте backend/.env
+npm run build
+pm2 start ecosystem.config.js
+pm2 save
+```
+
+В этом варианте Nginx должен раздавать `frontend/dist`, проксировать `/api/` на
+`http://127.0.0.1:3001/api/`, а `/ws` — на `http://127.0.0.1:3001/ws`. За основу
+можно взять `deploy/nginx/hall-booking.conf`, заменив общий `proxy_pass` на раздачу
+статических файлов.
+
+## Настройки backend
+
+| Переменная | Назначение |
+|---|---|
+| `NODE_ENV` | На сервере обязательно `production` |
+| `JWT_SECRET` | Секрет сессий; в production минимум 32 символа |
+| `USER_INVITE_CODE` | Код регистрации пользователя |
+| `ADMIN_INVITE_CODE` | Отдельный код регистрации/повышения администратора |
+| `CORS_ORIGIN` | Полный публичный origin; несколько значений через запятую |
+| `APP_TIME_ZONE` | Часовой пояс IANA, по умолчанию `UTC` |
+| `DB_FILE` | Путь к базе относительно `backend/` |
+| `DOMAIN` | Публичный домен для контакта VAPID |
+| `PUSH_ENABLED` | `true`, чтобы включить Web Push |
+| `VAPID_FILE` | Путь к push-ключу; внутри Docker должен быть в `/app/data` |
+| `TRUST_PROXY` | `2` для цепочки системный Nginx → контейнерный Nginx |
+| `LOGIN_RATE_LIMIT` | Попыток входа с одного IP за 15 минут, стандартно `50` |
+| `PORT` | Порт API внутри контейнера, стандартно `3001` |
+
+При первом старте с push backend создаёт `/app/data/vapid.json`. Это приватный ключ: не
+коммитьте его и включайте в резервные копии. Если старый ключ когда-либо публиковался,
+удалите его и перезапустите backend для выпуска новой пары.
+
+## Разработка и проверки
+
+```bash
+npm run install:all
+npm --prefix backend run dev
+npm --prefix frontend run dev
+```
+
+Проверки перед релизом:
+
+```bash
+npm run check
+npm audit --prefix backend --omit=dev
+npm audit --prefix frontend
+```
+
+## Безопасность и данные
+
+- API-ответы с пользовательскими данными не кешируются Service Worker.
+- Production не запускается без обязательных секретов и корректного CORS.
+- Пароли хешируются `scrypt`, JWT действует 30 дней.
+- Вход имеет ограничение частоты запросов.
+- Порт приложения привязан к loopback, внешний доступ идёт только через Nginx.
+- Владелец инсталляции отвечает за доступ, резервирование и местные требования к
+  персональным данным.
+
+## Лицензия
+
+MIT — см. [LICENSE](LICENSE).

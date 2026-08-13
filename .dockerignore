@@ -1,0 +1,8 @@
+.git
+**/node_modules
+**/dist
+backend/data
+backend/.env
+backend/vapid.json
+logs
+tests/screenshots

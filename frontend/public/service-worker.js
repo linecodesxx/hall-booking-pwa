@@ -1,6 +1,5 @@
-const CACHE_NAME = 'hall-booking-v1';
+const CACHE_NAME = 'hall-booking-v2';
 const APP_SHELL = ['/', '/index.html', '/manifest.json'];
-const API_CACHE = 'hall-booking-api-v1';
 
 self.addEventListener('message', (event) => {
   if (event.data?.type === 'SKIP_WAITING') {
@@ -18,7 +17,7 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((keys) =>
       Promise.all(
         keys
-          .filter((key) => key !== CACHE_NAME && key !== API_CACHE)
+          .filter((key) => key !== CACHE_NAME)
           .map((key) => caches.delete(key))
       )
     )
@@ -30,9 +29,10 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // API requests — network first, fallback to cache
+  // Never cache authenticated API responses. A shared browser must not be able
+  // to read data left behind by a previously logged-in user.
   if (url.pathname.startsWith('/api/')) {
-    event.respondWith(networkFirst(request));
+    event.respondWith(fetch(request));
     return;
   }
 
@@ -50,22 +50,3 @@ self.addEventListener('fetch', (event) => {
     })
   );
 });
-
-async function networkFirst(request) {
-  try {
-    const response = await fetch(request);
-    if (response && response.status === 200) {
-      const clone = response.clone();
-      const cache = await caches.open(API_CACHE);
-      cache.put(request, clone);
-    }
-    return response;
-  } catch {
-    const cached = await caches.match(request);
-    if (cached) return cached;
-    return new Response(JSON.stringify({ error: 'Нет соединения' }), {
-      status: 503,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-}
