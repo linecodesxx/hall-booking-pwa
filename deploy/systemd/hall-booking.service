@@ -1,0 +1,25 @@
+[Unit]
+Description=Hall Booking API
+After=network.target
+
+[Service]
+Type=simple
+User=hallbooking
+Group=hallbooking
+WorkingDirectory=/opt/hall-booking/app/backend
+EnvironmentFile=/opt/hall-booking/app/backend/.env
+Environment=NODE_ENV=production
+Environment=HOST=127.0.0.1
+ExecStart=/usr/bin/node server.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/hall-booking/app/backend/data
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
