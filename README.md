@@ -11,8 +11,8 @@
 
 ## Production: VPS, домен, Nginx и HTTPS
 
-Ниже приведён полный сценарий для чистого Ubuntu 24.04. Вместо
-`booking.example.org` используйте свой домен.
+Ниже приведён полный сценарий для чистого Ubuntu 24.04. Вместо `example.org`
+используйте свой домен.
 
 ### 1. Подготовьте DNS и сервер
 
@@ -26,33 +26,32 @@ DNS-запись создаётся не на сервере и не в Nginx, �
 другого регистратора. Откройте раздел «Управление DNS», «DNS-записи» или «Зона
 домена».
 
-Для поддомена `booking.example.org` добавьте:
+Для обычного корневого домена `example.org` добавьте запись:
 
 ```text
 Тип: A
-Имя: booking
+Имя: @
 Значение: статический публичный IPv4-адрес ВМ из Yandex Cloud
 TTL: 300 или значение по умолчанию
 ```
 
-Например, если домен — `mychurch.ru`, поддомен — `booking.mychurch.ru`, а IP
-сервера — `51.250.10.20`, запись выглядит так:
-
-```text
-booking  300  A  51.250.10.20
-```
-
-Для размещения приложения прямо на корневом домене `example.org` вместо поддомена
-обычно указывают имя `@`:
+Например, если домен — `mychurch.ru`, а IP сервера — `51.250.10.20`, запись
+выглядит так:
 
 ```text
 @  300  A  51.250.10.20
 ```
 
-Точный вид поля «Имя» зависит от регистратора: некоторые панели ожидают только
-`booking`, другие позволяют ввести полное имя `booking.example.org`. Не меняйте
-NS-серверы домена и не подключайте Yandex Cloud DNS, если DNS уже обслуживается
-регистратором — достаточно одной записи `A` в существующей зоне.
+Чтобы адрес с `www` тоже работал, дополнительно создайте CNAME:
+
+```text
+www  300  CNAME  example.org.
+```
+
+Некоторые регистраторы вместо `@` ожидают пустое поле или полный домен. Не меняйте
+NS-серверы и не подключайте Yandex Cloud DNS, если DNS уже обслуживается
+регистратором — достаточно записи `A` в существующей зоне. Поддомен нужен только
+если на корневом домене уже работает другой сайт.
 
 Запись `AAAA` создавайте только при наличии настроенного статического публичного
 IPv6 на сервере. Ошибочная `AAAA` может привести к тому, что часть пользователей не
@@ -63,9 +62,9 @@ IPv6 на сервере. Ошибочная `AAAA` может привести 
 сертификата проверьте запись с вашего компьютера:
 
 ```bash
-dig +short A booking.example.org
+dig +short A example.org
 # либо, если dig не установлен:
-nslookup booking.example.org
+nslookup example.org
 ```
 
 В ответе должен быть именно статический публичный IP вашей ВМ. Пока домен указывает
@@ -118,10 +117,10 @@ PORT=3001
 JWT_SECRET=ВСТАВЬТЕ_СЮДА_64_СЛУЧАЙНЫХ_HEX_СИМВОЛА
 USER_INVITE_CODE=ОТДЕЛЬНЫЙ_СЛУЧАЙНЫЙ_КОД
 ADMIN_INVITE_CODE=ЕЩЁ_ОДИН_ОТДЕЛЬНЫЙ_КОД
-CORS_ORIGIN=https://booking.example.org
+CORS_ORIGIN=https://example.org
 APP_TIME_ZONE=Europe/Moscow
 DB_FILE=./data/app.db
-DOMAIN=booking.example.org
+DOMAIN=example.org
 PUSH_ENABLED=false
 VAPID_FILE=./data/vapid.json
 TRUST_PROXY=2
@@ -149,7 +148,7 @@ HTTPS извне нельзя. Backend вообще не публикует от
 `deploy/nginx/hall-booking.conf`. Скопируйте его и замените домен:
 
 ```bash
-BOOKING_DOMAIN=booking.example.org
+BOOKING_DOMAIN=example.org
 sudo cp deploy/nginx/hall-booking.conf /etc/nginx/sites-available/hall-booking
 sudo sed -i "s/booking\\.example\\.org/${BOOKING_DOMAIN}/g" \
   /etc/nginx/sites-available/hall-booking
@@ -171,7 +170,7 @@ sudo systemctl reload nginx
 Проверьте HTTP до выпуска сертификата:
 
 ```bash
-curl --fail http://booking.example.org/api/health
+curl --fail http://example.org/api/health
 ```
 
 Конфиг отдельно обрабатывает `/ws`, включая заголовки WebSocket Upgrade. Остальные
@@ -181,7 +180,7 @@ backend-контейнер.
 ### 5. Выпустите HTTPS-сертификат
 
 ```bash
-sudo certbot --nginx -d booking.example.org \
+sudo certbot --nginx -d example.org -d www.example.org \
   --redirect --agree-tos --no-eff-email -m admin@example.org
 ```
 
@@ -190,12 +189,12 @@ sudo certbot --nginx -d booking.example.org \
 
 ```bash
 sudo nginx -t
-curl --fail https://booking.example.org/api/health
+curl --fail https://example.org/api/health
 sudo certbot renew --dry-run
 systemctl status certbot.timer
 ```
 
-После этого откройте `https://booking.example.org`. PWA и браузерные push-уведомления
+После этого откройте `https://example.org`. PWA и браузерные push-уведомления
 работают только в безопасном HTTPS-контексте.
 
 Чтобы включить push, установите `PUSH_ENABLED=true` в `backend/.env` и пересоберите
@@ -248,7 +247,7 @@ git pull --ff-only
 docker compose build --pull
 docker compose up -d
 docker compose ps
-curl --fail https://booking.example.org/api/health
+curl --fail https://example.org/api/health
 ```
 
 Не запускайте несколько экземпляров backend: файловая база рассчитана на один
