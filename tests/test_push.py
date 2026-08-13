@@ -49,7 +49,7 @@ def request(method, path, body=None, token=None):
     except: j = {"raw": data}
     return resp.status, j
 
-WSL_ROOT = "/home/feytell2/hall-booking-pwa"
+WSL_ROOT = BASE
 
 os.environ["PORT"] = str(PORT)
 os.environ["USER_INVITE_CODE"] = "push123"
@@ -57,6 +57,7 @@ os.environ["ADMIN_INVITE_CODE"] = "pushAdmin"
 os.environ["JWT_SECRET"] = "push_test_secret"
 os.environ["CORS_ORIGIN"] = "*"
 os.environ["DOMAIN"] = "test.local"
+os.environ["PUSH_ENABLED"] = "true"
 
 # Clean up old DB
 subprocess.run(
@@ -68,7 +69,7 @@ print(f"[test] Starting backend on port {PORT}...")
 proc = subprocess.Popen(
     ["wsl.exe", "bash", "-lc",
      f"export PORT={PORT} USER_INVITE_CODE=push123 ADMIN_INVITE_CODE=pushAdmin "
-     f"JWT_SECRET=push_test_secret CORS_ORIGIN=* DOMAIN=test.local "
+     f"JWT_SECRET=push_test_secret CORS_ORIGIN=* DOMAIN=test.local PUSH_ENABLED=true "
      f"&& cd {WSL_ROOT}/backend && exec node server.js"],
     stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
 )

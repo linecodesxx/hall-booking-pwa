@@ -46,7 +46,7 @@ Nginx принимает домен и HTTPS. Node.js слушает тольк�
 ## Развёртывание без Docker
 
 Инструкция рассчитана на чистую Ubuntu 24.04 и корневой домен `example.org`.
-Во всех командах замените домен, email и URL репозитория своими значениями.
+Во всех командах замените пример домена и email своими значениями.
 
 ### 1. Сервер и DNS
 
@@ -226,7 +226,9 @@ curl --fail http://example.org/api/health
 ```
 
 Nginx напрямую раздаёт `frontend/dist`, `/api/` проксирует в Node.js, а `/ws` — в
-WebSocket backend. Если на сервере уже есть другие сайты, не удаляйте их конфиги.
+WebSocket backend. Адрес с `www` перенаправляется на основной домен, поэтому у
+приложения остаётся один origin и не возникает расхождений CORS. Если на сервере уже
+есть другие сайты, не удаляйте их конфиги.
 
 ### 8. HTTPS через Certbot
 
@@ -293,8 +295,9 @@ sudo systemctl start hall-booking
 Восстановление:
 
 ```bash
+BACKUP_FILE=/var/backups/hall-booking/app-2026-08-13-1200.db
 sudo systemctl stop hall-booking
-sudo cp /var/backups/hall-booking/app-YYYY-MM-DD-HHMM.db \
+sudo cp "$BACKUP_FILE" \
   /opt/hall-booking/app/backend/data/app.db
 sudo chown hallbooking:hallbooking /opt/hall-booking/app/backend/data/app.db
 sudo chmod 600 /opt/hall-booking/app/backend/data/app.db

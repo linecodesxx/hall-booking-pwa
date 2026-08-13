@@ -1,5 +1,6 @@
 import subprocess, socket, time, sys, os, threading, json
 
+BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TS = str(int(time.time()))
 USER = f"User{TS}"
 ADMIN = f"Admin{TS}"
@@ -74,7 +75,7 @@ def main():
     subprocess.run('wsl.exe pkill -f "vite" 2>/dev/null', shell=True)
     time.sleep(2)
 
-    wsl_home = "/home/feytell2/hall-booking-pwa"
+    wsl_home = BASE
     procs = []
 
     try:

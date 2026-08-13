@@ -5,7 +5,7 @@ BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BPORT = 3099
 FPORT = 5173
 
-WSL_ROOT = '/home/feytell2/hall-booking-pwa'
+WSL_ROOT = BASE
 
 os.environ['PORT'] = str(BPORT)
 os.environ['USER_INVITE_CODE'] = '123456'

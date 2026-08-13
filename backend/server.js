@@ -23,6 +23,18 @@ if (missingVariables.length) {
 if (isProduction && process.env.JWT_SECRET.length < 32) {
   throw new Error('JWT_SECRET must contain at least 32 characters in production');
 }
+const unsafeProductionValues = new Set([
+  '123456',
+  'admin123',
+  'change_me',
+  'replace-with-at-least-32-random-characters',
+]);
+if (
+  isProduction &&
+  requiredVariables.some((name) => unsafeProductionValues.has(process.env[name]))
+) {
+  throw new Error('Replace all example secrets and invite codes before production startup');
+}
 if (process.env.USER_INVITE_CODE === process.env.ADMIN_INVITE_CODE) {
   throw new Error('USER_INVITE_CODE and ADMIN_INVITE_CODE must be different');
 }
@@ -67,6 +79,12 @@ const LOGIN_RATE_LIMIT = Number(process.env.LOGIN_RATE_LIMIT || 50);
 
 let vapidKeys;
 if (PUSH_ENABLED) {
+  if (
+    !process.env.DOMAIN ||
+    ['localhost', 'example.com', 'example.org'].includes(process.env.DOMAIN)
+  ) {
+    throw new Error('DOMAIN must be set to the real public domain when push is enabled');
+  }
   const vapidPath = process.env.VAPID_FILE
     ? join(__dirname, process.env.VAPID_FILE)
     : join(__dirname, 'data', 'vapid.json');
