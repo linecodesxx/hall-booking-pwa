@@ -122,7 +122,8 @@ npm --version
 ```bash
 sudo useradd --system --create-home --home-dir /opt/hall-booking \
   --shell /usr/sbin/nologin hallbooking
-sudo -u hallbooking git clone YOUR_REPOSITORY_URL /opt/hall-booking/app
+sudo -u hallbooking git clone https://github.com/linecodesxx/hall-booking-pwa.git \
+  /opt/hall-booking/app
 cd /opt/hall-booking/app
 ```
 
